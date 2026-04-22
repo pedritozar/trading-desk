@@ -746,48 +746,46 @@ function showTab(tab) {
 // PRECIOS — Frankfurter (forex) + Finnhub (índices)
 // ══════════════════════════════════════
 
-// Pares forex via Frankfurter (gratis, sin key, sin CORS)
-const FOREX_PAIRS = [
-  { sym: 'EUR/USD', base: 'EUR', quote: 'USD' },
-  { sym: 'GBP/USD', base: 'GBP', quote: 'USD' },
-  { sym: 'USD/JPY', base: 'USD', quote: 'JPY' },
-  { sym: 'GBP/JPY', base: 'GBP', quote: 'JPY' },
-  { sym: 'GBP/CAD', base: 'GBP', quote: 'CAD' },
-  { sym: 'AUD/USD', base: 'AUD', quote: 'USD' },
-  { sym: 'USD/CHF', base: 'USD', quote: 'CHF' },
-  { sym: 'EUR/CAD', base: 'EUR', quote: 'CAD' },
-  { sym: 'NZD/USD', base: 'NZD', quote: 'USD' },
-  { sym: 'AUD/CHF', base: 'AUD', quote: 'CHF' },
-];
-
-// Índices via Finnhub
+// Todos los precios via Finnhub
 const FINNHUB_KEY = 'd74v8h1r01qg1eo710mg';
-const INDEX_SYMS = [
-  { sym: 'SPY', label: 'S&P 500' },
-  { sym: 'QQQ', label: 'NASDAQ' },
+
+const ALL_SYMS = [
+  { sym: 'EUR/USD', fh: 'OANDA:EUR_USD' },
+  { sym: 'GBP/USD', fh: 'OANDA:GBP_USD' },
+  { sym: 'USD/JPY', fh: 'OANDA:USD_JPY' },
+  { sym: 'GBP/JPY', fh: 'OANDA:GBP_JPY' },
+  { sym: 'GBP/CAD', fh: 'OANDA:GBP_CAD' },
+  { sym: 'AUD/USD', fh: 'OANDA:AUD_USD' },
+  { sym: 'USD/CHF', fh: 'OANDA:USD_CHF' },
+  { sym: 'EUR/CAD', fh: 'OANDA:EUR_CAD' },
+  { sym: 'NZD/USD', fh: 'OANDA:NZD_USD' },
+  { sym: 'AUD/CHF', fh: 'OANDA:AUD_CHF' },
+  { sym: 'XAU/USD', fh: 'OANDA:XAU_USD' },
+  { sym: 'S&P 500', fh: 'SPY' },
+  { sym: 'NASDAQ',  fh: 'QQQ' },
+  { sym: 'DXY',     fh: 'TVC:DXY',  static: { price: 104.20, chg: -0.15 } },
+  { sym: 'BRENT',   fh: 'OANDA:BRENT_USD', static: { price: 74.85, chg: 0.32 } },
+  { sym: 'USD/RUB', fh: 'OANDA:USD_RUB', static: { price: 82.50, chg: 0.0 } },
 ];
 
-// Estáticos actualizados periódicamente
-const STATIC_PRICES = [
-  { sym: 'XAU/USD', price: 3115.00, chg: 0.45 },
-  { sym: 'DXY',     price: 104.20,  chg: -0.15 },
-  { sym: 'BRENT',   price: 74.85,   chg: 0.32 },
+// MOEX via API pública del exchange ruso
+const MOEX_SYMS = [
+  { sym: 'MOEX',  ticker: 'IMOEX', board: 'SNDX' },
+  { sym: 'RTSI',  ticker: 'RTSI',  board: 'SNDX' },
 ];
 
 const SYMBOLS = [
-  ...FOREX_PAIRS.map(p => ({ sym: p.sym })),
-  ...INDEX_SYMS.map(i => ({ sym: i.label })),
-  ...STATIC_PRICES.map(s => ({ sym: s.sym })),
+  ...ALL_SYMS.map(s => ({ sym: s.sym })),
+  ...MOEX_SYMS.map(m => ({ sym: m.sym })),
 ];
 
 let priceData = {};
 
-// Render skeleton inicial
 function renderPriceSkeleton() {
   const grid = document.getElementById('price-grid');
   if (Object.keys(priceData).length === 0) {
-    grid.innerHTML = SYMBOLS.map(s => `
-      <div class="price-card" id="pc-${s.sym.replace('/','_').replace(' ','_')}">
+    grid.innerHTML = [...ALL_SYMS, ...MOEX_SYMS].map(s => `
+      <div class="price-card" id="pc-${s.sym.replace('/','_').replace(' ','_').replace('&','_')}">
         <div class="price-sym">${s.sym}</div>
         <div class="price-val" style="color:var(--text-muted)">— — —</div>
         <div class="price-chg neu">Cargando...</div>
@@ -795,76 +793,51 @@ function renderPriceSkeleton() {
   }
 }
 
-async function fetchForex() {
-  // Frankfurter: un request trae todos los pares con base USD
-  // Hacemos dos requests: base EUR y base GBP para cubrir todos
-  const bases = ['EUR', 'GBP', 'AUD', 'NZD', 'USD'];
-  const allRates = {};
-
-  for (const base of bases) {
+async function fetchMOEX() {
+  for (const m of MOEX_SYMS) {
     try {
-      const [todayRes, prevRes] = await Promise.all([
-        fetch(`https://api.frankfurter.app/latest?base=${base}`),
-        fetch(`https://api.frankfurter.app/latest?base=${base}`)
-      ]);
-      const today = await todayRes.json();
-      if (today.rates) {
-        allRates[base] = today.rates;
-        allRates[base]['_self'] = 1;
-      }
-    } catch(e) {}
-  }
-
-  FOREX_PAIRS.forEach(pair => {
-    try {
-      let price = null;
-      if (allRates[pair.base] && allRates[pair.base][pair.quote]) {
-        price = allRates[pair.base][pair.quote];
-      } else if (allRates[pair.quote] && allRates[pair.quote][pair.base]) {
-        price = 1 / allRates[pair.quote][pair.base];
-      }
-      if (price) {
-        // Frankfurter no da precio anterior en tiempo real, estimamos 0% cambio
-        priceData[pair.sym] = { price, chg: 0 };
-        updatePriceCard(pair.sym, price, 0);
-      }
-    } catch(e) {}
-  });
-}
-
-async function fetchFinnhub() {
-  for (const idx of INDEX_SYMS) {
-    try {
-      const url = `https://finnhub.io/api/v1/quote?symbol=${idx.sym}&token=${FINNHUB_KEY}`;
+      const url = `https://iss.moex.com/iss/engines/stock/markets/index/boards/${m.board}/securities/${m.ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,CURRENTVALUE,LASTTOPREVPRICE`;
       const res = await fetch(url);
       const d = await res.json();
-      if (d && d.c) {
-        const price = d.c;
-        const prev = d.pc;
-        const chg = prev ? ((price - prev) / prev * 100) : 0;
-        priceData[idx.label] = { price, chg };
-        updatePriceCard(idx.label, price, chg);
+      const row = d?.marketdata?.data?.[0];
+      if (row && row[1]) {
+        const price = parseFloat(row[1]);
+        const chgPct = parseFloat(row[2]) || 0;
+        priceData[m.sym] = { price, chg: chgPct };
+        updatePriceCard(m.sym, price, chgPct);
       }
     } catch(e) {}
   }
-}
-
-function loadStaticPrices() {
-  STATIC_PRICES.forEach(s => {
-    priceData[s.sym] = { price: s.price, chg: s.chg };
-    updatePriceCard(s.sym, s.price, s.chg);
-  });
 }
 
 async function fetchPrices() {
   renderPriceSkeleton();
-  loadStaticPrices();
-  await Promise.all([fetchForex(), fetchFinnhub()]);
+  await Promise.all([
+    ...ALL_SYMS.map(async s => {
+      if (s.static) {
+        priceData[s.sym] = s.static;
+        updatePriceCard(s.sym, s.static.price, s.static.chg);
+      }
+      try {
+        const url = `https://finnhub.io/api/v1/quote?symbol=${s.fh}&token=${FINNHUB_KEY}`;
+        const res = await fetch(url);
+        const d = await res.json();
+        if (d && d.c && d.c > 0) {
+          const price = d.c;
+          const prev = d.pc;
+          const chg = prev ? ((price - prev) / prev * 100) : 0;
+          priceData[s.sym] = { price, chg };
+          updatePriceCard(s.sym, price, chg);
+        }
+      } catch(e) {}
+    }),
+    fetchMOEX()
+  ]);
   buildTicker();
 }
 
 function updatePriceCard(sym, price, chg) {
-  const id = sym.replace('/','_').replace(' ','_');
+  const id = sym.replace('/','_').replace(' ','_').replace('&','_');
   const card = document.getElementById('pc-' + id);
   if (!card) return;
 
