@@ -928,10 +928,12 @@ setInterval(fetchPrices, 60000); // refresh cada 60s
 // CSV IMPORT
 // ══════════════════════════════════════
 let trades = [];
+let currentFileName = '';
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
+  currentFileName = file.name;
   const reader = new FileReader();
   reader.onload = function(ev) {
     const text = ev.target.result;
@@ -976,7 +978,8 @@ function parseCSV(text) {
     trades.push(t);
   }
 
-  document.getElementById('status-data').textContent = `${trades.length} trades cargados desde "${file ? file.name : 'CSV'}"`;
+  document.getElementById('status-data').textContent = `${trades.length} trades cargados desde "${currentFileName || 'CSV'}"`;
+  console.log('CSV parseado:', trades.length, 'trades', trades);
   renderAll();
 }
 
