@@ -940,18 +940,37 @@ document.getElementById('csv-input').addEventListener('change', function(e) {
 });
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  // Detectar separador: ; o ,
+  const sep = text.indexOf(';') !== -1 ? ';' : ',';
+
+  // Limpiar BOM y normalizar saltos de línea
+  const clean = text.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = clean.trim().split('\n');
   if (lines.length < 2) return;
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+  // Encontrar la fila de headers reales — buscar la que contenga "FECHA" y "ACTIVO"
+  let headerIdx = -1;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    if (lines[i].toLowerCase().includes('fecha') && lines[i].toLowerCase().includes('activo')) {
+      headerIdx = i;
+      break;
+    }
+  }
+  if (headerIdx === -1) return;
+
+  const headers = lines[headerIdx].split(sep).map(h => h.trim().replace(/"/g,'').toLowerCase());
 
   trades = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = lines[i].split(',').map(v => v.trim().replace(/"/g,''));
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const vals = lines[i].split(sep).map(v => v.trim().replace(/"/g,''));
     if (vals.every(v => !v)) continue;
 
     const t = {};
     headers.forEach((h, idx) => { t[h] = vals[idx] || ''; });
+
+    // Solo incluir filas que tengan al menos activo o entrada
+    if (!t['activo'] && !t['entrada']) continue;
+
     trades.push(t);
   }
 
