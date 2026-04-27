@@ -969,8 +969,9 @@ function parseCSV(text) {
     const t = {};
     headers.forEach((h, idx) => { t[h] = vals[idx] || ''; });
 
-    // Solo incluir filas que tengan al menos activo o entrada
-    if (!t['activo'] && !t['entrada']) continue;
+    // Solo incluir filas que tengan al menos algún valor no vacío
+    const valores = Object.values(t).filter(v => v && v.trim());
+    if (valores.length < 3) continue;
 
     trades.push(t);
   }
