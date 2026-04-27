@@ -930,6 +930,20 @@ setInterval(fetchPrices, 60000); // refresh cada 60s
 let trades = [];
 let currentFileName = '';
 
+// Cargar trades guardados al iniciar
+(function loadFromStorage() {
+  try {
+    const saved = localStorage.getItem('pei_trades');
+    const savedName = localStorage.getItem('pei_trades_filename');
+    if (saved) {
+      trades = JSON.parse(saved);
+      currentFileName = savedName || 'CSV guardado';
+      document.getElementById('status-data').textContent = `${trades.length} trades cargados desde "${currentFileName}"`;
+      renderAll();
+    }
+  } catch(e) {}
+})();
+
 document.getElementById('csv-input').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -977,6 +991,12 @@ function parseCSV(text) {
 
     trades.push(t);
   }
+
+  // Guardar en localStorage para persistir entre sesiones
+  try {
+    localStorage.setItem('pei_trades', JSON.stringify(trades));
+    localStorage.setItem('pei_trades_filename', currentFileName);
+  } catch(e) {}
 
   document.getElementById('status-data').textContent = `${trades.length} trades cargados desde "${currentFileName || 'CSV'}"`;
   console.log('CSV parseado:', trades.length, 'trades', trades);
