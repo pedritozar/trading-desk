@@ -61,6 +61,35 @@ body {
   min-height: 100vh;
 }
 
+/* ── INDICES TAB ── */
+.idx-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(340px,1fr)); gap:16px; margin-top:16px; }
+.idx-card { background:var(--bg-card); border:1px solid var(--border); padding:20px; }
+.idx-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px; }
+.idx-name { font-size:11px; font-weight:600; letter-spacing:.12em; text-transform:uppercase; color:var(--text-secondary); }
+.idx-ticker { font-size:9px; font-family:'DM Mono',monospace; color:var(--text-muted); margin-top:2px; }
+.idx-price { font-family:'DM Mono',monospace; font-size:26px; font-weight:500; color:var(--text-primary); }
+.idx-change { font-family:'DM Mono',monospace; font-size:12px; margin-top:3px; }
+.idx-change.up { color:var(--green); }
+.idx-change.down { color:var(--red); }
+.idx-change.flat { color:var(--text-muted); }
+.idx-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:14px; padding-top:14px; border-top:1px solid var(--divider); }
+.idx-stat-label { font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:3px; }
+.idx-stat-value { font-family:'DM Mono',monospace; font-size:12px; color:var(--text-primary); }
+.idx-chart-wrap { margin-top:14px; padding-top:14px; border-top:1px solid var(--divider); }
+.idx-chart-label { font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
+.idx-bar-wrap { margin-top:12px; }
+.idx-bar-row { display:flex; align-items:center; gap:6px; margin-bottom:3px; }
+.idx-bar-month { font-size:8px; font-family:'DM Mono',monospace; color:var(--text-muted); width:24px; text-align:right; flex-shrink:0; }
+.idx-bar-outer { flex:1; background:var(--bg-subtle); height:8px; position:relative; }
+.idx-bar-inner { height:100%; position:absolute; top:0; transition:width .4s ease; }
+.idx-bar-val { font-size:8px; font-family:'DM Mono',monospace; width:38px; text-align:right; flex-shrink:0; }
+.idx-status-row { display:flex; justify-content:space-between; align-items:center; margin-top:12px; padding-top:10px; border-top:1px solid var(--divider); }
+.idx-source { font-size:8px; font-family:'DM Mono',monospace; color:var(--text-muted); }
+.idx-badge { font-size:8px; font-family:'DM Mono',monospace; padding:2px 7px; border:1px solid var(--border); color:var(--text-muted); }
+.idx-badge.live { border-color:var(--green); color:var(--green); }
+.idx-badge.static { border-color:var(--yellow); color:var(--yellow); }
+.idx-badge.error { border-color:var(--red); color:var(--red); }
+
 /* ── SCROLLBAR ── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -645,6 +674,7 @@ body {
   <button class="nav-btn" onclick="showTab('metricas')">Métricas</button>
   <button class="nav-btn" onclick="showTab('precios')">Precios</button>
   <button class="nav-btn" onclick="showTab('mercado'); if(!mercadoInterval) initMercadoTab();">Mercado</button>
+  <button class="nav-btn" onclick="showTab('indices'); if(!indicesLoaded) initIndicesTab();">Índices</button>
 </div>
 
 <!-- MAIN -->
@@ -838,6 +868,7 @@ body {
         </div>
       </div>
     </div>
+  </div>
 
     <!-- Fila 4: Kelly Criterion -->
     <div class="card" style="margin-top:16px">
@@ -905,7 +936,7 @@ body {
       </div>
     </div>
 
-  </div><!-- /tab-metricas -->
+  </div>
 
 
   <!-- ══ MERCADO TAB ══ -->
@@ -948,6 +979,20 @@ body {
   <div id="tab-precios" class="tab-content">
     <div class="section-title">Precios en tiempo real — Cierre anterior · Variación</div>
     <div class="price-grid" id="price-grid"></div>
+  </div>
+
+  <!-- ══ INDICES TAB ══ -->
+  <div id="tab-indices" class="tab-content">
+    <div class="section-title">Índices Globales — Precios · Curva 12M · Retornos Mensuales · Estadísticas</div>
+
+    <div class="idx-grid" id="indices-grid">
+      <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace;padding:40px 0">Cargando índices…</div>
+    </div>
+
+    <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">
+      <span>Fuente: Twelve Data (plan Basic 800 req/día) · Fallback: datos estáticos mensuales</span>
+      <span id="indices-last-update">—</span>
+    </div>
   </div>
 
 </div>
@@ -1830,7 +1875,7 @@ const FOREX_SYMBOLS = [
   'USD/CAD','USD/CHF','USD/JPY',
   'EUR/GBP','EUR/JPY','GBP/JPY'
 ];
-const COMMODITY_SYMBOLS = ['XAU/USD','XTI/USD','XBR/USD','XCU/USD','NATGAS/USD'];
+const COMMODITY_SYMBOLS = ['XAU/USD','WTI/USD','BRENT/USD','COPPER/USD','NATGAS/USD'];
 const ALL_MERCADO_SYMBOLS = [...FOREX_SYMBOLS, ...COMMODITY_SYMBOLS];
 
 let lastMercadoData = null;
@@ -1917,10 +1962,10 @@ function updateCommodities(data) {
   const container = document.getElementById('commodities-panel');
   if (!container) return;
 
-  const symbols = ['XAU/USD','XTI/USD','XBR/USD','XCU/USD','NATGAS/USD'];
+  const symbols = ['XAU/USD','WTI/USD','BRENT/USD','COPPER/USD','NATGAS/USD'];
   const names = {
-    'XAU/USD': 'Oro', 'XTI/USD': 'WTI', 'XBR/USD': 'Brent',
-    'XCU/USD': 'Cobre', 'NATGAS/USD': 'Gas Nat.'
+    'XAU/USD': 'Oro', 'WTI/USD': 'WTI', 'BRENT/USD': 'Brent',
+    'COPPER/USD': 'Cobre', 'NATGAS/USD': 'Gas Nat.'
   };
 
   container.innerHTML = symbols.map(sym => {
@@ -1943,6 +1988,225 @@ function initMercadoTab() {
   if (mercadoInterval) return;
   fetchMercado();
   mercadoInterval = setInterval(fetchMercado, 300_000);
+}
+
+// ══ INDICES TAB ══
+
+const TWELVE_KEY = '3e257ff3e9e14bd6bb24f2d7bd0e57c3';
+
+const INDICES_CONFIG = [
+  { id:'spx',    name:'S&P 500',           ticker:'SPX',    sym12:'SPX',    exchange:'',      flag:'🇺🇸', currency:'USD' },
+  { id:'rut',    name:'Russell 2000',       ticker:'RUT',    sym12:'RUT',    exchange:'',      flag:'🇺🇸', currency:'USD' },
+  { id:'sox',    name:'SOX Semiconductores',ticker:'SOX',    sym12:'SOX',    exchange:'',      flag:'🇺🇸', currency:'USD' },
+  { id:'hstech', name:'Hang Seng Tech',     ticker:'HSTECH', sym12:'HSTECH', exchange:'HKEX',  flag:'🇭🇰', currency:'HKD' },
+  { id:'csi300', name:'CSI 300',            ticker:'CSI300', sym12:'000300', exchange:'SSE',   flag:'🇨🇳', currency:'CNY' },
+  { id:'moex',   name:'MOEX Ruso',          ticker:'IMOEX',  sym12:'IMOEX',  exchange:'MOEX',  flag:'🇷🇺', currency:'RUB' },
+];
+
+// Manual monthly data — cargado el 1° de cada mes
+// Formato: { mes:'Jun-25', ret:6.05 }
+const MONTHLY_DATA = {
+  spx:    [ {mes:'Jun-25',ret:3.5},{mes:'Jul-25',ret:1.2},{mes:'Ago-25',ret:-2.1},{mes:'Sep-25',ret:4.0},{mes:'Oct-25',ret:2.8},{mes:'Nov-25',ret:3.9},{mes:'Dic-25',ret:-1.5},{mes:'Ene-26',ret:5.2},{mes:'Feb-26',ret:2.1},{mes:'Mar-26',ret:-4.8},{mes:'Abr-26',ret:-12.3},{mes:'May-26',ret:6.05} ],
+  rut:    [ {mes:'Jun-25',ret:2.1},{mes:'Jul-25',ret:0.8},{mes:'Ago-25',ret:-3.2},{mes:'Sep-25',ret:5.5},{mes:'Oct-25',ret:3.1},{mes:'Nov-25',ret:4.2},{mes:'Dic-25',ret:-2.1},{mes:'Ene-26',ret:6.8},{mes:'Feb-26',ret:1.9},{mes:'Mar-26',ret:-5.2},{mes:'Abr-26',ret:-14.1},{mes:'May-26',ret:8.3} ],
+  sox:    [ {mes:'Jun-25',ret:5.2},{mes:'Jul-25',ret:3.1},{mes:'Ago-25',ret:-4.5},{mes:'Sep-25',ret:7.2},{mes:'Oct-25',ret:4.8},{mes:'Nov-25',ret:6.1},{mes:'Dic-25',ret:-3.2},{mes:'Ene-26',ret:9.5},{mes:'Feb-26',ret:4.2},{mes:'Mar-26',ret:-8.1},{mes:'Abr-26',ret:-38.2},{mes:'May-26',ret:52.4} ],
+  hstech: [ {mes:'Jun-25',ret:4.1},{mes:'Jul-25',ret:-1.2},{mes:'Ago-25',ret:2.8},{mes:'Sep-25',ret:8.5},{mes:'Oct-25',ret:-2.1},{mes:'Nov-25',ret:3.2},{mes:'Dic-25',ret:1.8},{mes:'Ene-26',ret:2.5},{mes:'Feb-26',ret:-1.5},{mes:'Mar-26',ret:-3.8},{mes:'Abr-26',ret:-5.2},{mes:'May-26',ret:0.4} ],
+  csi300: [ {mes:'Jun-25',ret:2.8},{mes:'Jul-25',ret:-0.5},{mes:'Ago-25',ret:1.9},{mes:'Sep-25',ret:6.2},{mes:'Oct-25',ret:-1.8},{mes:'Nov-25',ret:2.1},{mes:'Dic-25',ret:0.9},{mes:'Ene-26',ret:3.1},{mes:'Feb-26',ret:-2.2},{mes:'Mar-26',ret:-4.1},{mes:'Abr-26',ret:-6.8},{mes:'May-26',ret:1.2} ],
+  moex:   [ {mes:'Jun-25',ret:1.5},{mes:'Jul-25',ret:-2.1},{mes:'Ago-25',ret:0.8},{mes:'Sep-25',ret:3.2},{mes:'Oct-25',ret:-1.2},{mes:'Nov-25',ret:2.8},{mes:'Dic-25',ret:1.1},{mes:'Ene-26',ret:-0.5},{mes:'Feb-26',ret:1.9},{mes:'Mar-26',ret:-2.8},{mes:'Abr-26',ret:-3.1},{mes:'May-26',ret:2.4} ],
+};
+
+// Precios de referencia (actualizados manualmente el 1° de cada mes)
+const STATIC_PRICES = {
+  spx:    { price:7619,  change:0.49,  high52:7625,  low52:4812 },
+  rut:    { price:2919,  change:-0.59, high52:2942,  low52:2043 },
+  sox:    { price:12829, change:-0.14, high52:13115, low52:4759 },
+  hstech: { price:5786,  change:1.80,  high52:5911,  low52:3820 },
+  csi300: { price:4920,  change:0.98,  high52:5030,  low52:3827 },
+  moex:   { price:2810,  change:0.50,  high52:3200,  low52:2100 },
+};
+
+let indicesLoaded = false;
+
+function calcStats(data) {
+  if (!data || !data.length) return { avg:0, vol:0, best:{mes:'—',ret:0}, worst:{mes:'—',ret:0}, cumRet:0 };
+  const rets = data.map(d => d.ret);
+  const avg = rets.reduce((a,b)=>a+b,0)/rets.length;
+  const vol = Math.sqrt(rets.reduce((a,b)=>a+(b-avg)**2,0)/rets.length);
+  const best = data.reduce((a,b)=>b.ret>a.ret?b:a);
+  const worst = data.reduce((a,b)=>b.ret<a.ret?b:a);
+  const cumRet = rets.reduce((acc,r)=>acc*(1+r/100),1)*100-100;
+  return { avg:avg.toFixed(1), vol:vol.toFixed(1), best, worst, cumRet:cumRet.toFixed(1) };
+}
+
+function renderBarChart(data) {
+  if (!data || !data.length) return '<div style="color:var(--text-muted);font-size:10px">Sin datos</div>';
+  const maxAbs = Math.max(...data.map(d=>Math.abs(d.ret)), 0.1);
+  const midX = 50; // center line %
+  return data.map(d => {
+    const isPos = d.ret >= 0;
+    const color = isPos ? 'var(--green)' : 'var(--red)';
+    const barW = Math.abs(d.ret)/maxAbs*48; // max 48% of half
+    const left = isPos ? midX : midX - barW;
+    const sign = isPos ? '+' : '';
+    return `<div class="idx-bar-row">
+      <span class="idx-bar-month">${d.mes.slice(0,3)}</span>
+      <div class="idx-bar-outer" style="position:relative">
+        <div style="position:absolute;top:0;left:${midX}%;width:1px;height:100%;background:var(--divider)"></div>
+        <div class="idx-bar-inner" style="left:${left}%;width:${barW}%;background:${color}"></div>
+      </div>
+      <span class="idx-bar-val" style="color:${color}">${sign}${d.ret.toFixed(1)}%</span>
+    </div>`;
+  }).join('');
+}
+
+function renderSVGCurve(data) {
+  if (!data || !data.length) return '<div style="color:var(--text-muted);font-size:10px">Sin datos</div>';
+  // Build cumulative curve
+  let cum = 100;
+  const points = data.map((d,i) => {
+    cum *= (1+d.ret/100);
+    return { x:i, y:cum };
+  });
+  const minY = Math.min(...points.map(p=>p.y));
+  const maxY = Math.max(...points.map(p=>p.y));
+  const rangeY = maxY - minY || 1;
+  const W=280, H=70, pad=6;
+  const px = i => pad + (i/(data.length-1||1))*(W-2*pad);
+  const py = v => H-pad-(v-minY)/rangeY*(H-2*pad);
+  const pathD = points.map((p,i)=>`${i===0?'M':'L'}${px(p.x).toFixed(1)},${py(p.y).toFixed(1)}`).join(' ');
+  // area fill
+  const areaD = pathD + ` L${px(points.length-1).toFixed(1)},${H} L${px(0).toFixed(1)},${H} Z`;
+  const isUp = points[points.length-1].y >= 100;
+  const lineColor = isUp ? 'var(--green)' : 'var(--red)';
+  const fillColor = isUp ? 'rgba(26,107,60,0.12)' : 'rgba(139,32,32,0.12)';
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:70px">
+    <path d="${areaD}" fill="${fillColor}" />
+    <path d="${pathD}" fill="none" stroke="${lineColor}" stroke-width="1.5" stroke-linejoin="round" />
+    <text x="${pad}" y="${H-1}" font-size="7" fill="var(--text-muted)" font-family="DM Mono">${data[0].mes}</text>
+    <text x="${W-pad}" y="${H-1}" font-size="7" fill="var(--text-muted)" font-family="DM Mono" text-anchor="end">${data[data.length-1].mes}</text>
+    <text x="${W/2}" y="10" font-size="7" fill="${lineColor}" font-family="DM Mono" text-anchor="middle">${points[points.length-1].y>=100?'+':''}${(points[points.length-1].y-100).toFixed(1)}% acum.</text>
+  </svg>`;
+}
+
+function buildIdxCard(cfg, priceData) {
+  const p = priceData || STATIC_PRICES[cfg.id] || {};
+  const price = p.price || '—';
+  const change = p.change !== undefined ? p.change : null;
+  const high52 = p.high52 || '—';
+  const low52 = p.low52 || '—';
+  const isLive = p.isLive || false;
+
+  const changeClass = change === null ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
+  const changeSign = change !== null && change > 0 ? '+' : '';
+  const changeStr = change !== null ? `${changeSign}${change.toFixed(2)}%` : '—';
+
+  const monthly = MONTHLY_DATA[cfg.id] || [];
+  const stats = calcStats(monthly);
+
+  const fmt = n => typeof n === 'number' ? n.toLocaleString('es-AR', {minimumFractionDigits:0,maximumFractionDigits:0}) : n;
+
+  return `<div class="idx-card">
+    <div class="idx-header">
+      <div>
+        <div class="idx-name">${cfg.flag} ${cfg.name}</div>
+        <div class="idx-ticker">${cfg.ticker} · ${cfg.currency}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="idx-price">${typeof price==='number'?price.toLocaleString('es-AR',{minimumFractionDigits:0,maximumFractionDigits:0}):price}</div>
+        <div class="idx-change ${changeClass}">${changeStr} hoy</div>
+      </div>
+    </div>
+
+    <div class="idx-stats">
+      <div>
+        <div class="idx-stat-label">Máx 52 sem</div>
+        <div class="idx-stat-value">${fmt(high52)}</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Mín 52 sem</div>
+        <div class="idx-stat-value">${fmt(low52)}</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Ret. acum 12M</div>
+        <div class="idx-stat-value" style="color:${parseFloat(stats.cumRet)>=0?'var(--green)':'var(--red)'}">${stats.cumRet >= 0 ? '+' : ''}${stats.cumRet}%</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Ret. prom/mes</div>
+        <div class="idx-stat-value">${stats.avg}%</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Volatilidad</div>
+        <div class="idx-stat-value">${stats.vol}%</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Mejor / Peor</div>
+        <div class="idx-stat-value" style="font-size:10px"><span style="color:var(--green)">+${stats.best.ret}%</span> / <span style="color:var(--red)">${stats.worst.ret}%</span></div>
+      </div>
+    </div>
+
+    <div class="idx-chart-wrap">
+      <div class="idx-chart-label">Curva acumulada 12M</div>
+      ${renderSVGCurve(monthly)}
+    </div>
+
+    <div class="idx-bar-wrap">
+      <div class="idx-chart-label" style="margin-bottom:6px">Retorno mensual</div>
+      ${renderBarChart(monthly)}
+    </div>
+
+    <div class="idx-status-row">
+      <span class="idx-source">Fuente: Twelve Data${isLive ? ' · live' : ' · EOD'}</span>
+      <span class="idx-badge ${isLive ? 'live' : 'static'}">${isLive ? 'LIVE' : 'ESTÁTICO'}</span>
+    </div>
+  </div>`;
+}
+
+async function fetchIndicesLive() {
+  const symbols = INDICES_CONFIG.map(c => c.sym12).join(',');
+  try {
+    const url = `https://api.twelvedata.com/quote?symbol=${symbols}&apikey=${TWELVE_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.code) throw new Error(data.message);
+    return data;
+  } catch(e) {
+    console.warn('Twelve Data indices error:', e.message);
+    return null;
+  }
+}
+
+async function initIndicesTab() {
+  if (indicesLoaded) return;
+  indicesLoaded = true;
+
+  const grid = document.getElementById('indices-grid');
+  if (!grid) return;
+
+  // Render with static data immediately
+  grid.innerHTML = INDICES_CONFIG.map(cfg => buildIdxCard(cfg, STATIC_PRICES[cfg.id])).join('');
+
+  // Try live prices
+  const liveData = await fetchIndicesLive();
+  if (liveData) {
+    const updated = INDICES_CONFIG.map(cfg => {
+      const q = liveData[cfg.sym12];
+      if (!q || q.status === 'error') return { cfg, priceData: STATIC_PRICES[cfg.id] };
+      return {
+        cfg,
+        priceData: {
+          price:    parseFloat(q.close) || STATIC_PRICES[cfg.id]?.price,
+          change:   parseFloat(q.percent_change) || 0,
+          high52:   parseFloat(q['fifty_two_week']?.high) || STATIC_PRICES[cfg.id]?.high52,
+          low52:    parseFloat(q['fifty_two_week']?.low)  || STATIC_PRICES[cfg.id]?.low52,
+          isLive:   true,
+        }
+      };
+    });
+    grid.innerHTML = updated.map(({cfg, priceData}) => buildIdxCard(cfg, priceData)).join('');
+  }
+
+  const el = document.getElementById('indices-last-update');
+  if (el) el.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
 }
 
 // Init calendar on load
