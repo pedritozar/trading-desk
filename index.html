@@ -2168,18 +2168,24 @@ const YAHOO_SYMBOLS = {
 
 async function fetchYahoo(yahooSym) {
   try {
-    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=1d`;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=5d`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const meta = json?.chart?.result?.[0]?.meta;
+    const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
     if (!meta) throw new Error('Sin datos');
-    const price  = meta.regularMarketPrice;
+    // Precio: live si mercado abierto, último cierre si cerrado
+    const livePrice = meta.regularMarketPrice;
+    const lastClose = closes ? closes.filter(Boolean).slice(-1)[0] : null;
+    const prevClose = meta.previousClose || meta.chartPreviousClose;
+    const price  = livePrice || lastClose || prevClose;
+    const isLive = !!meta.regularMarketPrice;
     const change = meta.regularMarketChangePercent ||
-                   ((price - meta.previousClose) / meta.previousClose * 100);
-    const high52 = meta.fiftyTwoWeekHigh  || null;
-    const low52  = meta.fiftyTwoWeekLow   || null;
-    return { price, change, high52, low52, isLive: true };
+                   (prevClose ? ((price - prevClose) / prevClose * 100) : 0);
+    const high52 = meta.fiftyTwoWeekHigh || null;
+    const low52  = meta.fiftyTwoWeekLow  || null;
+    return { price, change, high52, low52, isLive };
   } catch(e) {
     console.warn(`Yahoo fetch ${yahooSym} error:`, e.message);
     return null;
