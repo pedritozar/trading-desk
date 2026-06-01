@@ -529,6 +529,70 @@ body {
   .three-col { grid-template-columns: 1fr; }
 }
 
+
+/* ── MERCADO TAB ── */
+.strength-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+.cur-label {
+  width: 36px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.05em;
+}
+.bar-bg {
+  flex: 1;
+  height: 10px;
+  background: var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: 5px;
+  transition: width 0.6s ease;
+}
+.cur-value {
+  width: 32px;
+  text-align: right;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+.comm-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+}
+.comm-row:last-child { border-bottom: none; }
+.comm-name {
+  width: 90px;
+  color: var(--text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  font-size: 9px;
+}
+.comm-price {
+  flex: 1;
+  text-align: right;
+  margin-right: 16px;
+  color: var(--text-primary);
+  font-size: 14px;
+}
+.comm-change {
+  min-width: 75px;
+  text-align: right;
+  font-size: 11px;
+}
+
 /* ── ANIMATIONS ── */
 @keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
@@ -580,6 +644,7 @@ body {
   <button class="nav-btn" onclick="showTab('trades')">Trades</button>
   <button class="nav-btn" onclick="showTab('metricas')">Métricas</button>
   <button class="nav-btn" onclick="showTab('precios')">Precios</button>
+  <button class="nav-btn" onclick="showTab('mercado'); if(!mercadoInterval) initMercadoTab();">Mercado</button>
 </div>
 
 <!-- MAIN -->
@@ -841,6 +906,43 @@ body {
       </div>
     </div>
 
+  </div>
+
+
+  <!-- ══ MERCADO TAB ══ -->
+  <div id="tab-mercado" class="tab-content">
+    <div class="section-title">Mercado — Currency Strength · Commodities · Actualización 5 min</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px">
+
+      <!-- Currency Strength -->
+      <div class="card">
+        <div class="card-title">
+          <span>Currency Strength Meter</span>
+          <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Twelve Data · 8 divisas</span>
+        </div>
+        <div id="currency-strength" style="padding:8px 0">
+          <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+        </div>
+      </div>
+
+      <!-- Commodities -->
+      <div class="card">
+        <div class="card-title">
+          <span>Commodities</span>
+          <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Twelve Data · precio + variación 24h</span>
+        </div>
+        <div id="commodities-panel" style="padding:8px 0">
+          <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Última actualización -->
+    <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);text-align:right">
+      Última actualización: <span id="mercado-last-update">—</span> · Auto-refresh cada 5 min
+    </div>
   </div>
 
   <!-- ══ PRECIOS TAB ══ -->
@@ -1714,6 +1816,134 @@ function initAutoSync() {
   const btnA = document.getElementById('btnAutoSync');
   if (btnF) btnF.addEventListener('click', fijarCSV);
   if (btnA) btnA.addEventListener('click', toggleAutoSync);
+}
+
+
+// ══════════════════════════════════════
+// TAB MERCADO — Currency Strength + Commodities
+// DeepSeek R1 — 2026-06-01 · Twelve Data API
+// ══════════════════════════════════════
+
+const TWELVE_DATA_KEY = '3e257ff3e9e14bd6bb24f2d7bd0e57c3';
+
+const FOREX_SYMBOLS = [
+  'EUR/USD','GBP/USD','AUD/USD','NZD/USD',
+  'USD/CAD','USD/CHF','USD/JPY',
+  'EUR/GBP','EUR/JPY','GBP/JPY'
+];
+const COMMODITY_SYMBOLS = ['XAU/USD','WTI/USD','BRENT/USD','COPPER/USD','NATGAS/USD'];
+const ALL_MERCADO_SYMBOLS = [...FOREX_SYMBOLS, ...COMMODITY_SYMBOLS];
+
+let lastMercadoData = null;
+let mercadoInterval = null;
+
+async function fetchMercado() {
+  const url = `https://api.twelvedata.com/quote?symbol=${ALL_MERCADO_SYMBOLS.join(',')}&apikey=${TWELVE_DATA_KEY}`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (data.code) { console.warn('Twelve Data error:', data.message); return; }
+    const tieneDatos = ALL_MERCADO_SYMBOLS.some(sym => data[sym]);
+    if (!tieneDatos) { console.warn('Twelve Data: respuesta vacía'); return; }
+    lastMercadoData = data;
+    updateCurrencyStrength(data);
+    updateCommodities(data);
+    const el = document.getElementById('mercado-last-update');
+    if (el) el.textContent = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  } catch (err) {
+    console.error('fetchMercado error:', err);
+  }
+}
+
+function updateCurrencyStrength(data) {
+  const container = document.getElementById('currency-strength');
+  if (!container) return;
+
+  const currencies = ['USD','EUR','GBP','JPY','CHF','AUD','NZD','CAD'];
+  const pairsConfig = [
+    { pair:'EUR/USD', base:'EUR', quote:'USD' },
+    { pair:'GBP/USD', base:'GBP', quote:'USD' },
+    { pair:'AUD/USD', base:'AUD', quote:'USD' },
+    { pair:'NZD/USD', base:'NZD', quote:'USD' },
+    { pair:'USD/CAD', base:'USD', quote:'CAD' },
+    { pair:'USD/CHF', base:'USD', quote:'CHF' },
+    { pair:'USD/JPY', base:'USD', quote:'JPY' },
+    { pair:'EUR/GBP', base:'EUR', quote:'GBP' },
+    { pair:'EUR/JPY', base:'EUR', quote:'JPY' },
+    { pair:'GBP/JPY', base:'GBP', quote:'JPY' }
+  ];
+
+  const scores = {};
+  currencies.forEach(c => scores[c] = 0);
+  pairsConfig.forEach(({ pair, base, quote }) => {
+    const q = data[pair];
+    if (!q) return;
+    const change = parseFloat(q.change_percent) || 0;
+    scores[base] += change;
+    scores[quote] -= change;
+  });
+
+  const values = Object.values(scores);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+
+  const strengthMap = {};
+  Object.entries(scores).forEach(([cur, score]) => {
+    strengthMap[cur] = ((score - min) / range) * 100;
+  });
+
+  // Ordenar por fuerza descendente
+  const sorted = [...currencies].sort((a,b) => strengthMap[b] - strengthMap[a]);
+
+  container.innerHTML = sorted.map(cur => {
+    const strength = strengthMap[cur] ?? 50;
+    let color = 'var(--red)';
+    if (strength > 60) color = 'var(--green)';
+    else if (strength >= 40) color = '#ffaa00';
+    const width = Math.round(strength);
+    return `
+      <div class="strength-row">
+        <span class="cur-label">${cur}</span>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${width}%;background:${color};"></div>
+        </div>
+        <span class="cur-value" style="color:${color}">${width}</span>
+      </div>`;
+  }).join('');
+}
+
+function updateCommodities(data) {
+  const container = document.getElementById('commodities-panel');
+  if (!container) return;
+
+  const symbols = ['XAU/USD','WTI/USD','BRENT/USD','COPPER/USD','NATGAS/USD'];
+  const names = {
+    'XAU/USD': 'Oro', 'WTI/USD': 'WTI', 'BRENT/USD': 'Brent',
+    'COPPER/USD': 'Cobre', 'NATGAS/USD': 'Gas Nat.'
+  };
+
+  container.innerHTML = symbols.map(sym => {
+    const q = data[sym];
+    if (!q) return `<div class="comm-row"><span class="comm-name">${names[sym]||sym}</span><span style="color:var(--text-muted)">sin datos</span></div>`;
+    const price = parseFloat(q.close) || 0;
+    const change = parseFloat(q.change_percent) || 0;
+    const arrow = change >= 0 ? '▲' : '▼';
+    const color = change >= 0 ? 'var(--green)' : 'var(--red)';
+    return `
+      <div class="comm-row">
+        <span class="comm-name">${names[sym]||sym}</span>
+        <span class="comm-price">${price.toLocaleString('es-AR',{minimumFractionDigits:2,maximumFractionDigits:2})}</span>
+        <span class="comm-change" style="color:${color}">${arrow} ${Math.abs(change).toFixed(2)}%</span>
+      </div>`;
+  }).join('');
+}
+
+function initMercadoTab() {
+  if (mercadoInterval) return;
+  fetchMercado();
+  mercadoInterval = setInterval(fetchMercado, 300_000);
 }
 
 // Init calendar on load
