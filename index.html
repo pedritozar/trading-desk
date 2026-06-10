@@ -1224,14 +1224,28 @@ document.getElementById('csv-input').addEventListener('change', function(e) {
 });
 
 function parseCSV(text) {
-  const lines = text.trim().split('\n');
+  const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) return;
 
-  const headers = lines[0].split(',').map(h => h.trim().replace(/"/g,'').toLowerCase());
+  // Auto-detectar delimitador: ; o ,
+  const sampleLine = lines.slice(0,5).find(l => l.includes(';') || l.includes(',')) || lines[0];
+  const delim = (sampleLine.split(';').length > sampleLine.split(',').length) ? ';' : ',';
+
+  // Encontrar fila de headers: la que contiene "FECHA" (ignorar filas vacías y título)
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(lines.length, 10); i++) {
+    if (lines[i].toLowerCase().includes('fecha')) { headerIdx = i; break; }
+  }
+
+  const rawHeaders = lines[headerIdx].split(delim).map(h => h.trim().replace(/"/g,'').toLowerCase());
+  // Detectar si hay columna vacía inicial y saltarla
+  const colOffset = rawHeaders[0] === '' ? 1 : 0;
+  const headers = rawHeaders.slice(colOffset);
 
   trades = [];
-  for (let i = 1; i < lines.length; i++) {
-    const vals = lines[i].split(',').map(v => v.trim().replace(/"/g,''));
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const rawVals = lines[i].split(delim).map(v => v.trim().replace(/"/g,''));
+    const vals = rawVals.slice(colOffset);
     if (vals.every(v => !v)) continue;
 
     const t = {};
