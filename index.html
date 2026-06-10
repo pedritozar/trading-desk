@@ -1253,10 +1253,21 @@ function parseCSV(text) {
     trades.push(t);
   }
 
+  // Persistir CSV en localStorage para restaurar al recargar
+  try { localStorage.setItem('pei_csv_backup', text); } catch(e) {}
+
   const statusEl = document.getElementById('status-data');
   if (statusEl) statusEl.textContent = `${trades.length} trades cargados`;
   renderAll();
 }
+
+// Restaurar CSV desde localStorage al cargar la página
+(function restoreCSV() {
+  try {
+    const saved = localStorage.getItem('pei_csv_backup');
+    if (saved) parseCSV(saved);
+  } catch(e) {}
+})()
 
 // ══════════════════════════════════════
 // RENDER
