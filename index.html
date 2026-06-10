@@ -1792,8 +1792,9 @@ let autoSyncInterval = null;
 const SYNC_PERIOD = 30_000;
 
 async function fijarCSV() {
+  // Si File System Access API no está disponible o está bloqueada → usar input normal
   if (!window.showOpenFilePicker) {
-    console.warn('File System Access API no disponible en este navegador.');
+    document.getElementById('csv-input').click();
     return;
   }
   try {
@@ -1811,9 +1812,10 @@ async function fijarCSV() {
     syncBtn.disabled = false;
     syncBtn.style.opacity = '1';
   } catch (err) {
-    if (err.name !== 'AbortError') {
-      console.error('Error al fijar CSV:', err);
-    }
+    if (err.name === 'AbortError') return; // usuario canceló
+    console.error('Error al fijar CSV:', err);
+    // Fallback: usar input normal si la API falla
+    document.getElementById('csv-input').click();
   }
 }
 
