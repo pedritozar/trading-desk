@@ -772,6 +772,21 @@ body {
       </div>
     </div>
 
+    <!-- ══ DEMO vs LIVE ══ -->
+    <div class="section-title" style="margin-top:20px">Demo vs Live — Auditoría de Cuentas</div>
+    <div class="two-col" style="margin-bottom:16px" id="cuentas-panels"></div>
+
+    <!-- ══ ANÁLISIS ══ -->
+    <div class="section-title" style="margin-top:20px">Análisis — Distribución · Activos · Castigo</div>
+    <div class="card" style="margin-bottom:16px">
+      <div style="display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap">
+        <button onclick="setAnalisisView('torta')" id="btn-torta" style="background:var(--text-primary);color:var(--bg-primary);border:1px solid var(--border);padding:5px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px">Distribución</button>
+        <button onclick="setAnalisisView('activo')" id="btn-activo" style="background:none;color:var(--text-muted);border:1px solid var(--border);padding:5px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px">Por Activo</button>
+        <button onclick="setAnalisisView('castigo')" id="btn-castigo" style="background:none;color:var(--text-muted);border:1px solid var(--border);padding:5px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;border-radius:3px">Castigados</button>
+      </div>
+      <div id="analisis-container"></div>
+    </div>
+
   </div>
 
   <!-- ══ TRADES TAB ══ -->
@@ -1290,6 +1305,8 @@ function renderAll() {
   renderCalendar();
   renderDistribucion();
   renderMetricas();
+  renderCuentasPanels();
+  renderAnalisis();
 }
 
 function renderKPIs() {
@@ -1555,6 +1572,283 @@ function renderMiniBar(id, categories, getter) {
       <div class="bar-val" style="font-size:10px">${map[c]}</div>
     </div>`;
   }).join('');
+}
+
+// ══════════════════════════════════════
+// DEMO vs LIVE — Auditoría de Cuentas
+// ══════════════════════════════════════
+function renderCuentasPanels() {
+  const cont = document.getElementById('cuentas-panels');
+  if (!cont) return;
+
+  const isDemo = t => col(t,'cuenta').toLowerCase().includes('demo');
+  const isLive = t => col(t,'cuenta').toLowerCase().includes('live');
+
+  const demoTrades = trades.filter(isDemo);
+  const liveTrades = trades.filter(isLive);
+
+  cont.innerHTML = [
+    buildCuentaPanel('DEMO', demoTrades, 'var(--text-secondary)'),
+    buildCuentaPanel('LIVE', liveTrades, 'var(--green)')
+  ].join('');
+}
+
+function buildCuentaPanel(label, arr, accentColor) {
+  const ganadas   = arr.filter(t => col(t,'resultado').toUpperCase() === 'GANADA');
+  const perdidas  = arr.filter(t => col(t,'resultado').toUpperCase() === 'PERDIDA');
+  const closed    = ganadas.length + perdidas.length;
+  const wr        = closed ? (ganadas.length / closed * 100) : 0;
+  const pnls      = arr.map(t => parseFloat(col(t,'p&l','pnl')) || 0);
+  const totalPnl  = pnls.reduce((a,b) => a+b, 0);
+  const pnlStr    = arr.length ? (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(2) + 'R' : '—';
+  const wrStr     = closed ? wr.toFixed(1) + '%' : '—';
+
+  // Por sistema
+  const teslaTrades  = arr.filter(t => col(t,'sistema').toUpperCase() === 'TESLA');
+  const maletaTrades = arr.filter(t => col(t,'sistema').toUpperCase() === 'MALETA');
+  const teslaG  = teslaTrades.filter(t => col(t,'resultado').toUpperCase() === 'GANADA').length;
+  const teslaP  = teslaTrades.filter(t => col(t,'resultado').toUpperCase() === 'PERDIDA').length;
+  const maletaG = maletaTrades.filter(t => col(t,'resultado').toUpperCase() === 'GANADA').length;
+  const maletaP = maletaTrades.filter(t => col(t,'resultado').toUpperCase() === 'PERDIDA').length;
+  const teslaWR  = (teslaG + teslaP)  ? (teslaG  / (teslaG  + teslaP)  * 100).toFixed(0) + '%' : '—';
+  const maletaWR = (maletaG + maletaP) ? (maletaG / (maletaG + maletaP) * 100).toFixed(0) + '%' : '—';
+
+  // Mini equity curve SVG
+  let equitySVG = `<text x="150" y="45" text-anchor="middle" font-size="9" fill="var(--text-muted)" font-family="DM Mono">Sin trades</text>`;
+  if (arr.length >= 2) {
+    let cum = 0;
+    const pts = arr.map((t,i) => { cum += (parseFloat(col(t,'p&l','pnl'))||0); return {x:i, y:cum}; });
+    const W=300, H=70, PAD=6;
+    const ys = pts.map(p=>p.y);
+    const minY = Math.min(...ys, 0), maxY = Math.max(...ys, 0);
+    const rY = maxY - minY || 1;
+    const sx = x => PAD + (x/(pts.length-1))*(W-PAD*2);
+    const sy = y => PAD + (1-(y-minY)/rY)*(H-PAD*2);
+    const d  = pts.map((p,i) => `${i===0?'M':'L'}${sx(p.x).toFixed(1)},${sy(p.y).toFixed(1)}`).join(' ');
+    const last = pts[pts.length-1].y;
+    const lc   = last >= 0 ? accentColor : 'var(--red)';
+    const zY   = sy(0);
+    const area = d + ` L${sx(pts.length-1).toFixed(1)},${zY.toFixed(1)} L${sx(0).toFixed(1)},${zY.toFixed(1)} Z`;
+    equitySVG = `
+      <defs><linearGradient id="cg-${label}" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${lc}" stop-opacity="0.2"/>
+        <stop offset="100%" stop-color="${lc}" stop-opacity="0"/>
+      </linearGradient></defs>
+      <line x1="${PAD}" y1="${zY.toFixed(1)}" x2="${W-PAD}" y2="${zY.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <path d="${area}" fill="url(#cg-${label})"/>
+      <path d="${d}" fill="none" stroke="${lc}" stroke-width="1.5"/>
+      <circle cx="${sx(pts.length-1)}" cy="${sy(last)}" r="2.5" fill="${lc}"/>`;
+  }
+
+  const noData = arr.length === 0;
+
+  return `
+  <div class="card" style="border-top:2px solid ${accentColor}">
+    <div class="card-title" style="margin-bottom:14px">
+      <span style="color:${accentColor};letter-spacing:0.12em">${label}</span>
+      <span style="color:var(--text-muted);font-size:10px">${arr.length} trades · ${closed} cerrados</span>
+    </div>
+    ${noData ? `<div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:11px">Sin trades ${label.toLowerCase()} — completá columna CUENTA en Excel</div>` : `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px">
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">Win Rate</div>
+        <div style="font-size:18px;font-weight:600;color:${wr >= 50 ? accentColor : 'var(--red)'};">${wrStr}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">P&L Neto</div>
+        <div style="font-size:18px;font-weight:600;color:${totalPnl >= 0 ? accentColor : 'var(--red)'};">${pnlStr}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">G · P</div>
+        <div style="font-size:18px;font-weight:600">${ganadas.length} · ${perdidas.length}</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div style="background:var(--bg-secondary);border-radius:6px;padding:8px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">TESLA</div>
+        <div style="font-size:13px;font-weight:600">${teslaTrades.length} trades · WR ${teslaWR}</div>
+      </div>
+      <div style="background:var(--bg-secondary);border-radius:6px;padding:8px">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-muted);margin-bottom:4px">MALETA</div>
+        <div style="font-size:13px;font-weight:600">${maletaTrades.length} trades · WR ${maletaWR}</div>
+      </div>
+    </div>
+    <svg viewBox="0 0 300 70" style="width:100%;height:70px;display:block">${equitySVG}</svg>
+    `}
+  </div>`;
+}
+
+// ══════════════════════════════════════
+// ANÁLISIS — Distribución / Por Activo / Castigados
+// ══════════════════════════════════════
+let analisisView = 'torta';
+
+function setAnalisisView(v) {
+  analisisView = v;
+  ['torta','activo','castigo'].forEach(k => {
+    const btn = document.getElementById('btn-' + k);
+    if (!btn) return;
+    btn.style.background = k === v ? 'var(--text-primary)' : 'none';
+    btn.style.color      = k === v ? 'var(--bg-primary)'  : 'var(--text-muted)';
+  });
+  renderAnalisis();
+}
+
+function clasificarActivo(nombre) {
+  const n = (nombre || '').toUpperCase().trim();
+  const indices  = ['SPX','SPY','SYP','RUT','RUSSEL','SOX','HSTECH','CSI','MOEX','NAS','DOW','NDX','DAX','FTSE','NIKKEI','IBEX','CAC','ASX','HANG','EURO STOXX','S&P','SP500'];
+  const comod    = ['XAU','GOLD','XTI','OIL','BRENT','XBR','XCU','COPPER','SILVER','XAG','PLAT','WHEAT','CORN','SOYB','NATURAL','GAS','NG'];
+  const acciones = ['AAPL','TSLA','NVDA','AMZN','MSFT','GOOG','META','BRK','JPM','BAC','BABA','SHOP','NFLX','DIS','INTC','AMD','UBER','COIN'];
+  if (indices.some(x  => n.includes(x))) return 'Índices';
+  if (comod.some(x    => n.includes(x))) return 'Commodities';
+  if (acciones.some(x => n.includes(x))) return 'Acciones';
+  if (/^[A-Z]{6}$/.test(n) || /[A-Z]{3}[A-Z]{3}/.test(n) || n.includes('/') || n.includes('USD') || n.includes('EUR') || n.includes('JPY') || n.includes('GBP') || n.includes('AUD') || n.includes('CAD') || n.includes('CHF') || n.includes('NZD')) return 'Forex';
+  return 'Otros';
+}
+
+function renderAnalisis() {
+  const cont = document.getElementById('analisis-container');
+  if (!cont) return;
+  if (!trades.length) {
+    cont.innerHTML = `<div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:11px">Cargá el CSV para ver el análisis</div>`;
+    return;
+  }
+  if (analisisView === 'torta')   cont.innerHTML = buildTorta();
+  if (analisisView === 'activo')  cont.innerHTML = buildPorActivo();
+  if (analisisView === 'castigo') cont.innerHTML = buildCastigados();
+}
+
+function buildTorta() {
+  const COLORS = { 'Forex':'#4ade80','Índices':'#60a5fa','Commodities':'#fbbf24','Acciones':'#f472b6','Otros':'#94a3b8' };
+  const map = {};
+  trades.forEach(t => {
+    const cat = clasificarActivo(col(t,'activo'));
+    map[cat] = (map[cat] || 0) + 1;
+  });
+  const cats   = Object.keys(map).sort((a,b) => map[b]-map[a]);
+  const total  = trades.length;
+  const W=220, R=80, cx=110, cy=110;
+  let startAngle = -Math.PI/2;
+  let slices = '';
+
+  cats.forEach(cat => {
+    const pct   = map[cat] / total;
+    const angle = pct * 2 * Math.PI;
+    const end   = startAngle + angle;
+    const x1 = cx + R * Math.cos(startAngle);
+    const y1 = cy + R * Math.sin(startAngle);
+    const x2 = cx + R * Math.cos(end);
+    const y2 = cy + R * Math.sin(end);
+    const large = angle > Math.PI ? 1 : 0;
+    const midA  = startAngle + angle/2;
+    const lx    = cx + (R*0.65) * Math.cos(midA);
+    const ly    = cy + (R*0.65) * Math.sin(midA);
+    const color = COLORS[cat] || '#94a3b8';
+    slices += `<path d="M${cx},${cy} L${x1.toFixed(1)},${y1.toFixed(1)} A${R},${R} 0 ${large},1 ${x2.toFixed(1)},${y2.toFixed(1)} Z" fill="${color}" stroke="var(--bg-primary)" stroke-width="2"/>`;
+    if (pct > 0.06) slices += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" dominant-baseline="middle" font-size="11" font-family="DM Mono" fill="var(--bg-primary)" font-weight="600">${(pct*100).toFixed(0)}%</text>`;
+    startAngle = end;
+  });
+
+  // Donut hole
+  slices += `<circle cx="${cx}" cy="${cy}" r="38" fill="var(--bg-card,var(--bg-primary))"/>`;
+  slices += `<text x="${cx}" y="${cy-6}" text-anchor="middle" font-size="11" font-family="DM Mono" fill="var(--text-muted)">TOTAL</text>`;
+  slices += `<text x="${cx}" y="${cy+10}" text-anchor="middle" font-size="16" font-weight="600" font-family="DM Mono" fill="var(--text-primary)">${total}</text>`;
+
+  const legend = cats.map(cat => `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div style="width:10px;height:10px;border-radius:2px;background:${COLORS[cat]||'#94a3b8'};flex-shrink:0"></div>
+      <div style="font-size:12px;color:var(--text-secondary)">${cat}</div>
+      <div style="margin-left:auto;font-size:12px;font-family:'DM Mono',monospace;color:var(--text-primary)">${map[cat]} <span style="color:var(--text-muted)">(${(map[cat]/total*100).toFixed(0)}%)</span></div>
+    </div>`).join('');
+
+  return `<div style="display:flex;gap:32px;align-items:center;flex-wrap:wrap">
+    <svg viewBox="0 0 ${W} ${W}" style="width:${W}px;height:${W}px;flex-shrink:0">${slices}</svg>
+    <div style="flex:1;min-width:160px">
+      <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:12px">Por clase de activo</div>
+      ${legend}
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)">
+        <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:8px">Activos únicos operados</div>
+        <div style="font-size:18px;font-family:'DM Mono',monospace;font-weight:600">${[...new Set(trades.map(t=>col(t,'activo')))].length}</div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function buildPorActivo() {
+  const map = {};
+  trades.forEach(t => {
+    const a = col(t,'activo') || 'N/D';
+    if (!map[a]) map[a] = { total:0, ganadas:0, perdidas:0, pnl:0 };
+    map[a].total++;
+    const r = col(t,'resultado').toUpperCase();
+    if (r === 'GANADA')  map[a].ganadas++;
+    if (r === 'PERDIDA') map[a].perdidas++;
+    map[a].pnl += parseFloat(col(t,'p&l','pnl')) || 0;
+  });
+  const activos = Object.keys(map).sort((a,b) => map[b].total - map[a].total).slice(0,10);
+  const maxTotal = Math.max(...activos.map(a => map[a].total));
+
+  const rows = activos.map(a => {
+    const d   = map[a];
+    const wr  = (d.ganadas + d.perdidas) ? (d.ganadas/(d.ganadas+d.perdidas)*100).toFixed(0)+'%' : '—';
+    const pct = (d.total/maxTotal*100).toFixed(0);
+    const cat = clasificarActivo(a);
+    const catColors = {'Forex':'#4ade80','Índices':'#60a5fa','Commodities':'#fbbf24','Acciones':'#f472b6','Otros':'#94a3b8'};
+    const barColor  = catColors[cat] || '#94a3b8';
+    return `<div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+        <div style="font-size:12px;font-weight:500">${a} <span style="font-size:10px;color:var(--text-muted);font-family:'DM Mono',monospace">${cat}</span></div>
+        <div style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text-muted)">${d.total} trades · WR ${wr}</div>
+      </div>
+      <div style="background:var(--border);border-radius:2px;height:8px;position:relative">
+        <div style="background:${barColor};width:${pct}%;height:100%;border-radius:2px;transition:width 0.3s"></div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div>
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:16px">Top ${activos.length} activos por frecuencia operada</div>
+    ${rows}
+  </div>`;
+}
+
+function buildCastigados() {
+  const map = {};
+  trades.forEach(t => {
+    const a = col(t,'activo') || 'N/D';
+    if (!map[a]) map[a] = { perdidas:0, pnlNeg:0, total:0 };
+    map[a].total++;
+    const r = col(t,'resultado').toUpperCase();
+    const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
+    if (r === 'PERDIDA') { map[a].perdidas++; map[a].pnlNeg += pnl; }
+  });
+
+  const castigados = Object.keys(map)
+    .filter(a => map[a].perdidas > 0 || map[a].pnlNeg < 0)
+    .sort((a,b) => map[b].perdidas - map[a].perdidas || map[a].pnlNeg - map[b].pnlNeg)
+    .slice(0,8);
+
+  if (!castigados.length) return `<div style="text-align:center;padding:40px 0;color:var(--text-muted);font-size:11px">Sin trades perdidos — 100% WR</div>`;
+
+  const rows = castigados.map((a,i) => {
+    const d   = map[a];
+    const cat = clasificarActivo(a);
+    const pnlStr = d.pnlNeg < 0 ? d.pnlNeg.toFixed(2)+'R' : '0.00R';
+    const lossRate = (d.perdidas / d.total * 100).toFixed(0);
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:18px;font-weight:700;color:var(--text-muted);width:24px;text-align:center;font-family:'DM Mono',monospace">${i+1}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${a} <span style="font-size:10px;color:var(--text-muted)">${cat}</span></div>
+        <div style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-top:2px">${d.perdidas} pérdidas de ${d.total} trades · ${lossRate}% loss rate</div>
+      </div>
+      <div style="font-size:14px;font-family:'DM Mono',monospace;color:var(--red)">${pnlStr}</div>
+    </div>`;
+  }).join('');
+
+  return `<div>
+    <div style="font-size:9px;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:8px">Activos con mayor pérdida — por frecuencia + P&L</div>
+    ${rows}
+  </div>`;
 }
 
 // ══════════════════════════════════════
