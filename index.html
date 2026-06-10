@@ -1253,7 +1253,8 @@ function parseCSV(text) {
     trades.push(t);
   }
 
-  document.getElementById('status-data').textContent = `${trades.length} trades cargados desde "${file ? file.name : 'CSV'}"`;
+  const statusEl = document.getElementById('status-data');
+  if (statusEl) statusEl.textContent = `${trades.length} trades cargados`;
   renderAll();
 }
 
