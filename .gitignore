@@ -1,0 +1,62 @@
+# ═══════════════════════════════════════════════
+# .gitignore — PEI Trading Desk
+# Todo lo listado acá NUNCA se sube a GitHub, aunque
+# corras `git add .` por accidente. El repo es PÚBLICO
+# (GitHub Pages), así que esto es la red de seguridad.
+# ═══════════════════════════════════════════════
+
+# ── SECRETOS — lo más importante ──
+# Capturas y archivos con credenciales de brokers.
+# OJO: los patrones cubren errores de tipeo a propósito ("contrseña" sin la
+# primera 'a' es un archivo real que existía acá) — si el nombre está mal
+# escrito el patrón igual tiene que agarrarlo.
+*contr*eña*
+*contr*ena*
+*contrase*
+*contrsen*
+*password*
+*passwd*
+*credencial*
+# Capturas de credenciales de brokers, sin importar cómo se llamen
+*mt5*.png
+*MT5*.png
+HTML- DASBOARD/*.png
+HTML- DASBOARD/*.jpg
+# Claves de API sueltas
+*.key
+*.pem
+.env
+.env.*
+secrets.*
+*token*.txt
+
+# ── Basura de macOS ──
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+
+# ── Temporales de Excel / Office ──
+# El "~$archivo.xlsx" aparece cuando tenés el archivo abierto
+~$*
+*.tmp
+.~lock.*
+
+# ── Datos de trading (no van al sitio público) ──
+# La bitácora tiene tus operaciones reales: no hace falta
+# publicarlas, el dashboard las lee del CSV que cargás a mano.
+*.xlsx
+*.xlsm
+tracker_bitacora*.csv
+
+# ── Backups y copias ──
+*backup*
+*_old.*
+*_viejo.*
+*copia*
+*.bak
+
+# ── Carpeta de estudio CMT (PDFs pesados, material con copyright) ──
+traiding:cmt/
+trading-cmt/

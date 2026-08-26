@@ -1276,6 +1276,27 @@ function showTab(tab) {
 // Si algún día vuelve a fallar, verificar PRIMERO que la key tenga 40 chars.
 const FINNHUB_KEY = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
 
+// ⚠ MESES_ABREV va acá arriba a propósito: `restoreCSV()` corre apenas carga la
+// página (mucho antes de este punto del archivo) y termina llamando a
+// renderResumenMensual(). Si la constante se declara más abajo con `const`, queda
+// en zona muerta temporal (TDZ) y tira ReferenceError, que corta renderAll() a la
+// mitad y deja sin dibujar los paneles que van después (Demo vs Live, Análisis).
+const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// Parseo numérico tolerante al formato ARG: "+2,87" -> 2.87 (parseFloat solo daría 2).
+// Bug histórico del dashboard: el CSV exporta con coma decimal y todos los P&L
+// quedaban truncados al entero, mostrando +2,00R en vez de +2,87R.
+function parseNumAR(valor) {
+  if (valor === undefined || valor === null) return 0;
+  if (typeof valor === 'number') return isNaN(valor) ? 0 : valor;
+  const s = String(valor).trim().replace(/\s/g, '').replace('%', '');
+  if (!s) return 0;
+  // Si tiene coma, la coma es el separador decimal y el punto es de miles: "1.234,56"
+  const limpio = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : s;
+  const n = parseFloat(limpio);
+  return isNaN(n) ? 0 : n;
+}
+
 // Definición de símbolos con su fuente correcta
 const ALL_SYMS = [
   { sym: 'EUR/USD', source: 'frankfurter', fxSym: 'EUR' },
@@ -1567,20 +1588,20 @@ function renderKPIs() {
   const perdidas = data.filter(t => col(t, 'resultado').toUpperCase() === 'PERDIDA');
   const enCurso  = data.filter(t => col(t, 'resultado', 'estado').toUpperCase() === 'EN CURSO');
 
-  const pnls = data.map(t => parseFloat(col(t, 'p&l','pnl','resultado (r)')) || 0).filter(v => v !== 0);
+  const pnls = data.map(t => parseNumAR(col(t, 'p&l','pnl','resultado (r)')) || 0).filter(v => v !== 0);
   const totalPnl = pnls.reduce((a,b) => a+b, 0);
   const wr = closed.length ? (ganadas.length / (ganadas.length + perdidas.length) * 100) : 0;
 
   // Expectancy
-  const avgWin  = ganadas.length ? ganadas.map(t => parseFloat(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/ganadas.length : 0;
+  const avgWin  = ganadas.length ? ganadas.map(t => parseNumAR(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/ganadas.length : 0;
   const exp = (ganadas.length + perdidas.length) > 0
     ? (wr/100 * avgWin + (1 - wr/100) * -1)
     : 0;
 
   // Best/Worst
   const pnlTrades = data.filter(t => col(t,'p&l','pnl') !== '');
-  const best  = pnlTrades.reduce((a,b) => (parseFloat(col(b,'p&l','pnl'))||0) > (parseFloat(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
-  const worst = pnlTrades.reduce((a,b) => (parseFloat(col(b,'p&l','pnl'))||0) < (parseFloat(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
+  const best  = pnlTrades.reduce((a,b) => (parseNumAR(col(b,'p&l','pnl'))||0) > (parseNumAR(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
+  const worst = pnlTrades.reduce((a,b) => (parseNumAR(col(b,'p&l','pnl'))||0) < (parseNumAR(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
 
   set('kpi-total', data.length || '—');
   set('kpi-open',  `${enCurso.length} en curso`);
@@ -1594,11 +1615,11 @@ function renderKPIs() {
   set('kpi-exp', pnlTrades.length ? (exp >= 0 ? '+' : '') + exp.toFixed(2) + 'R' : '—');
 
   if (best && col(best,'activo')) {
-    set('kpi-best', '+' + (parseFloat(col(best,'p&l','pnl'))||0).toFixed(2) + 'R');
+    set('kpi-best', '+' + (parseNumAR(col(best,'p&l','pnl'))||0).toFixed(2) + 'R');
     set('kpi-best-act', col(best,'activo'));
   }
   if (worst && col(worst,'activo')) {
-    set('kpi-worst', (parseFloat(col(worst,'p&l','pnl'))||0).toFixed(2) + 'R');
+    set('kpi-worst', (parseNumAR(col(worst,'p&l','pnl'))||0).toFixed(2) + 'R');
     set('kpi-worst-act', col(worst,'activo'));
   }
 }
@@ -1615,7 +1636,7 @@ function renderEquity() {
   let cum = 0;
 
   data.forEach((t, i) => {
-    const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
+    const pnl = parseNumAR(col(t,'p&l','pnl')) || 0;
     cum += pnl;
     pts.push({ x: i, y: cum });
   });
@@ -1675,7 +1696,7 @@ function renderTrades() {
     const res = col(t,'resultado').toUpperCase();
     const badgeClass = res === 'GANADA' ? 'badge-green' : res === 'PERDIDA' ? 'badge-red' : res === 'EN CURSO' ? 'badge-blue' : res === 'BREAKEVEN' ? 'badge-yellow' : 'badge-gray';
     const pnl = col(t,'p&l','pnl');
-    const pnlNum = parseFloat(pnl) || 0;
+    const pnlNum = parseNumAR(pnl);
     const pnlStr = pnl ? (pnlNum >= 0 ? '+' : '') + pnlNum.toFixed(2) + 'R' : '—';
     const pnlColor = pnlNum > 0 ? 'color:var(--green)' : pnlNum < 0 ? 'color:var(--red)' : '';
 
@@ -1705,7 +1726,7 @@ function renderActivoBars() {
   const map = {};
   data.forEach(t => {
     const a = col(t,'activo');
-    const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
+    const pnl = parseNumAR(col(t,'p&l','pnl')) || 0;
     if (!a) return;
     map[a] = (map[a] || 0) + pnl;
   });
@@ -1736,8 +1757,8 @@ function renderSistema() {
     return;
   }
 
-  const teslaPnl = tesla.reduce((a,t) => a + (parseFloat(col(t,'p&l','pnl'))||0), 0);
-  const maletaPnl = maleta.reduce((a,t) => a + (parseFloat(col(t,'p&l','pnl'))||0), 0);
+  const teslaPnl = tesla.reduce((a,t) => a + (parseNumAR(col(t,'p&l','pnl'))||0), 0);
+  const maletaPnl = maleta.reduce((a,t) => a + (parseNumAR(col(t,'p&l','pnl'))||0), 0);
   const teslaWr = tesla.filter(t=>col(t,'resultado').toUpperCase()==='GANADA').length / (tesla.filter(t=>['GANADA','PERDIDA'].includes(col(t,'resultado').toUpperCase())).length||1) * 100;
   const maletaWr = maleta.filter(t=>col(t,'resultado').toUpperCase()==='GANADA').length / (maleta.filter(t=>['GANADA','PERDIDA'].includes(col(t,'resultado').toUpperCase())).length||1) * 100;
 
@@ -1785,7 +1806,7 @@ function renderCalendar() {
     const d = new Date(fecha);
     if (d.getFullYear() === year && d.getMonth() === month) {
       const day = d.getDate();
-      dayMap[day] = (dayMap[day] || 0) + (parseFloat(col(t,'p&l','pnl')) || 0);
+      dayMap[day] = (dayMap[day] || 0) + (parseNumAR(col(t,'p&l','pnl')) || 0);
     }
   });
 
@@ -1811,8 +1832,6 @@ function renderCalendar() {
 // Calculado en vivo desde los trades cargados — no guarda estado propio,
 // así no puede desincronizarse del Excel (misma lección del bug de P&L).
 // ══════════════════════════════════════
-const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-
 // Convierte "0,33%" / "1,00%" / "0.33" a fracción decimal (0.0033)
 function parseRiesgo(valor) {
   if (valor === undefined || valor === null) return null;
@@ -1839,7 +1858,7 @@ function agruparPorMes(data, anio) {
     if (res !== 'GANADA' && res !== 'PERDIDA' && res !== 'BREAKEVEN') return;
 
     const m = meses[d.getMonth()];
-    const pnl = parseFloat(String(col(t, 'p&l', 'pnl')).replace(',', '.')) || 0;
+    const pnl = parseNumAR(col(t, 'p&l', 'pnl'));
     m.r += pnl;
     m.trades++;
     if (res === 'GANADA') m.ganadas++;
@@ -2020,7 +2039,7 @@ function buildCuentaPanel(label, arr, accentColor) {
   const perdidas  = arr.filter(t => col(t,'resultado').toUpperCase() === 'PERDIDA');
   const closed    = ganadas.length + perdidas.length;
   const wr        = closed ? (ganadas.length / closed * 100) : 0;
-  const pnls      = arr.map(t => parseFloat(col(t,'p&l','pnl')) || 0);
+  const pnls      = arr.map(t => parseNumAR(col(t,'p&l','pnl')) || 0);
   const totalPnl  = pnls.reduce((a,b) => a+b, 0);
   const pnlStr    = arr.length ? (totalPnl >= 0 ? '+' : '') + totalPnl.toFixed(2) + 'R' : '—';
   const wrStr     = closed ? wr.toFixed(1) + '%' : '—';
@@ -2039,7 +2058,7 @@ function buildCuentaPanel(label, arr, accentColor) {
   let equitySVG = `<text x="150" y="45" text-anchor="middle" font-size="9" fill="var(--text-muted)" font-family="DM Mono">Sin trades</text>`;
   if (arr.length >= 2) {
     let cum = 0;
-    const pts = arr.map((t,i) => { cum += (parseFloat(col(t,'p&l','pnl'))||0); return {x:i, y:cum}; });
+    const pts = arr.map((t,i) => { cum += (parseNumAR(col(t,'p&l','pnl'))||0); return {x:i, y:cum}; });
     const W=300, H=70, PAD=6;
     const ys = pts.map(p=>p.y);
     const minY = Math.min(...ys, 0), maxY = Math.max(...ys, 0);
@@ -2205,7 +2224,7 @@ function buildPorActivo() {
     const r = col(t,'resultado').toUpperCase();
     if (r === 'GANADA')  map[a].ganadas++;
     if (r === 'PERDIDA') map[a].perdidas++;
-    map[a].pnl += parseFloat(col(t,'p&l','pnl')) || 0;
+    map[a].pnl += parseNumAR(col(t,'p&l','pnl')) || 0;
   });
   const activos = Object.keys(map).sort((a,b) => map[b].total - map[a].total).slice(0,10);
   const maxTotal = Math.max(...activos.map(a => map[a].total));
@@ -2241,7 +2260,7 @@ function buildCastigados() {
     if (!map[a]) map[a] = { perdidas:0, pnlNeg:0, total:0 };
     map[a].total++;
     const r = col(t,'resultado').toUpperCase();
-    const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
+    const pnl = parseNumAR(col(t,'p&l','pnl')) || 0;
     if (r === 'PERDIDA') { map[a].perdidas++; map[a].pnlNeg += pnl; }
   });
 
@@ -2308,8 +2327,8 @@ function calcKelly(tradesArr, sistema) {
   }
 
   const winRate = wins.length / filtered.length;
-  const avgWin  = wins.reduce((s,t) => s + (parseFloat(col(t,'p&l','pnl'))||0), 0) / wins.length;
-  const avgLoss = Math.abs(losses.reduce((s,t) => s + (parseFloat(col(t,'p&l','pnl'))||0), 0) / losses.length);
+  const avgWin  = wins.reduce((s,t) => s + (parseNumAR(col(t,'p&l','pnl'))||0), 0) / wins.length;
+  const avgLoss = Math.abs(losses.reduce((s,t) => s + (parseNumAR(col(t,'p&l','pnl'))||0), 0) / losses.length);
 
   const kelly       = kellyFraction(winRate, avgWin, avgLoss);
   const hKelly      = kelly / 2;
@@ -2369,10 +2388,10 @@ function calcSistema(tradeArr) {
   const closed = tradeArr.filter(t => ['GANADA','PERDIDA'].includes(col(t,'resultado').toUpperCase()));
   const ganadas = closed.filter(t => col(t,'resultado').toUpperCase() === 'GANADA');
   const perdidas = closed.filter(t => col(t,'resultado').toUpperCase() === 'PERDIDA');
-  const pnls = tradeArr.map(t => parseFloat(col(t,'p&l','pnl'))||0);
+  const pnls = tradeArr.map(t => parseNumAR(col(t,'p&l','pnl'))||0);
   const totalPnl = pnls.reduce((a,b)=>a+b,0);
-  const avgWin = ganadas.length ? ganadas.map(t=>parseFloat(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/ganadas.length : 0;
-  const avgLoss = perdidas.length ? Math.abs(perdidas.map(t=>parseFloat(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/perdidas.length) : 0;
+  const avgWin = ganadas.length ? ganadas.map(t=>parseNumAR(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/ganadas.length : 0;
+  const avgLoss = perdidas.length ? Math.abs(perdidas.map(t=>parseNumAR(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/perdidas.length) : 0;
   const wr = closed.length ? ganadas.length/closed.length*100 : 0;
   const profitFactor = (avgLoss > 0 && perdidas.length > 0) ? (avgWin * ganadas.length) / (avgLoss * perdidas.length) : 0;
   const { maxDD } = calcDrawdown(pnls);
@@ -2471,7 +2490,7 @@ function renderMetricas() {
   if (!trades.length) return;
 
   // Drawdown global
-  const pnls = trades.map(t => parseFloat(col(t,'p&l','pnl'))||0);
+  const pnls = trades.map(t => parseNumAR(col(t,'p&l','pnl'))||0);
   const { maxDD, ddSeries } = calcDrawdown(pnls);
 
   // Drawdown SVG
