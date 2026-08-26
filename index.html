@@ -638,6 +638,116 @@ body {
 .kpi-card:nth-child(5) { animation-delay: 0.25s; }
 .kpi-card:nth-child(6) { animation-delay: 0.30s; }
 
+/* ── RVOL PANEL ── */
+.rvol-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--divider);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+}
+.rvol-alert {
+  border-left: 3px solid var(--red);
+  padding-left: 0.5rem;
+  background: var(--divider);
+  border-radius: 2px;
+}
+.rvol-sym {
+  width: 80px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.rvol-ratio {
+  min-width: 45px;
+  text-align: right;
+}
+.rvol-alert-tag {
+  color: var(--red);
+  font-size: 0.7rem;
+  margin-left: 0.5rem;
+}
+.rvol-disclaimer {
+  margin-top: 0.75rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  border-top: 1px solid var(--divider);
+  padding-top: 0.5rem;
+}
+
+/* ── EARNINGS PANEL ── */
+.earnings-row {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--divider);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+}
+.earnings-week {
+  border-left: 3px solid var(--green);
+  padding-left: 0.5rem;
+  background: var(--divider);
+  border-radius: 2px;
+}
+.earnings-name {
+  width: 90px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.earnings-date {
+  min-width: 90px;
+  color: var(--text-primary);
+}
+.earnings-estado {
+  min-width: 70px;
+}
+.earnings-eps {
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* ── ROTACIÓN DE MERCADOS ── */
+.rotacion-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.35rem 0;
+  border-bottom: 1px solid var(--divider);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+}
+.rotacion-hora {
+  min-width: 110px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+.rotacion-flag {
+  min-width: 24px;
+}
+.rotacion-nombre {
+  flex: 1;
+  color: var(--text-primary);
+}
+.rotacion-change {
+  min-width: 70px;
+  text-align: right;
+  font-weight: 600;
+}
+.rotacion-disclaimer {
+  margin-top: 0.75rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.3;
+  border-top: 1px solid var(--divider);
+  padding-top: 0.5rem;
+}
+
 </style>
 </head>
 <body>
@@ -675,6 +785,7 @@ body {
   <button class="nav-btn" onclick="showTab('precios')">Precios</button>
   <button class="nav-btn" onclick="showTab('mercado'); if(!mercadoInterval) initMercadoTab();">Mercado</button>
   <button class="nav-btn" onclick="showTab('indices'); if(!indicesLoaded) initIndicesTab();">Índices</button>
+  <button class="nav-btn" onclick="showTab('earnings'); if(!earningsLoaded) initEarningsTab();">Earnings</button>
 </div>
 
 <!-- MAIN -->
@@ -682,6 +793,18 @@ body {
 
   <!-- ══ OVERVIEW TAB ══ -->
   <div id="tab-overview" class="tab-content active">
+
+    <!-- Selector de cuenta -->
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px">
+      <label for="selector-cuenta" style="color:var(--text-muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase">Cuenta:</label>
+      <select id="selector-cuenta" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:5px 10px;font-size:12px;font-family:'DM Mono',monospace;cursor:pointer;outline:none">
+        <option value="todas">Todas</option>
+        <option value="cmc demo">CMC Demo</option>
+        <option value="mt5 demo">MT5 Demo</option>
+        <option value="cmc live">CMC Live</option>
+        <option value="mt5 live">MT5 Live</option>
+      </select>
+    </div>
 
     <!-- KPIs -->
     <div class="kpi-grid" id="kpi-grid">
@@ -861,6 +984,14 @@ body {
       </div>
     </div>
 
+    <!-- Fila 2.5: Sesgo por Activo -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">Sesgo por Activo — dónde rendís y dónde no</div>
+      <div id="metricas-sesgo">
+        <div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Cargá el CSV para ver el sesgo por activo</div>
+      </div>
+    </div>
+
     <!-- Fila 3: Prop Firm Progress -->
     <div class="card">
       <div class="card-title">Prop Firm Challenge — 100K Account</div>
@@ -983,6 +1114,58 @@ body {
 
     </div>
 
+    <!-- RVOL — Volumen Relativo -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Volumen Relativo (RVOL)</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Twelve Data · contexto macro</span>
+      </div>
+      <div id="rvol-panel" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
+      <div class="rvol-disclaimer">Aproximación con datos diarios — no es volumen intradía real a la misma hora. Referencia de contexto, no señal de entrada.</div>
+    </div>
+
+    <!-- Flujo Institucional — Unusual Options Activity -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Flujo Institucional — Unusual Options Activity</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Barchart · delay ~25-30 min</span>
+      </div>
+      <div style="padding:8px 0">
+        <a href="https://www.barchart.com/options/unusual-activity" target="_blank" rel="noopener"
+           style="display:inline-block;padding:10px 16px;border:1px solid var(--border);color:var(--text-primary);font-family:'DM Mono',monospace;font-size:12px;text-decoration:none">
+          ↗ Abrir Unusual Options Activity (Barchart)
+        </a>
+        <div style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-top:8px;padding-top:8px;border-top:1px solid var(--divider)">
+          Confirmado: el embed en iframe queda en blanco (bloqueo por JS del lado de Barchart, no por headers). Se dejó como link directo en vez de un recuadro vacío ocupando espacio.
+          ⚠ Datos con demora (~25-30 min) — según lo hablado, no es un problema porque ya monitoreás flujo en vivo por otros canales (ForexFactory, MyFxBook, Bloomberg/Bloomberg TV). Este panel es contexto adicional, no tu fuente primaria.
+        </div>
+      </div>
+    </div>
+
+    <!-- Calendario Macro -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Calendario Macro — Alto Impacto</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Investing.com · filtrado por impacto alto</span>
+      </div>
+      <div style="padding:8px 0">
+        <iframe
+          id="calendario-macro-iframe"
+          src="https://sslecal2.investing.com/?columns=exc_flags,exc_currency,exc_importance,exc_actual,exc_forecast,exc_previous&features=datepicker,timezone&countries=5,32,6,37,72,22,17,39,14,10,35,43,56,36,110,11,26,4,25&calType=week&timeZone=8&lang=12&importance=3"
+          width="100%"
+          height="450"
+          frameborder="0"
+          style="border:1px solid var(--border);background:var(--bg-card)"
+          title="Calendario económico — eventos de alto impacto">
+        </iframe>
+        <div style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-top:8px;padding-top:8px;border-top:1px solid var(--divider)">
+          ⚠ La alerta automática 30min antes de un evento (parpadeo del panel) NO está implementada todavía — el contenido del iframe es de otro dominio (investing.com) y JS no puede leer su DOM por política del navegador (cross-origin). Para tener alertas reales hace falta una API de calendario económico que devuelva los eventos en JSON (ej. TradingEconomics, FMP, Finnhub calendar) — evaluar cuál conviene antes de programar esa parte. Mientras tanto: revisar el panel manualmente al empezar la jornada.
+        </div>
+      </div>
+    </div>
+
     <!-- Última actualización -->
     <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);text-align:right">
       Última actualización: <span id="mercado-last-update">—</span> · Auto-refresh cada 5 min
@@ -1006,6 +1189,32 @@ body {
     <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">
       <span>Fuente: Twelve Data (plan Basic 800 req/día) · Fallback: datos estáticos mensuales</span>
       <span id="indices-last-update">—</span>
+    </div>
+
+    <!-- Rotación de Mercados -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Rotación de Mercados — Secuencia de Aperturas</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Mismos datos del grid de arriba, ordenados por horario de apertura</span>
+      </div>
+      <div id="rotacion-mercados-panel" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
+      <div class="rotacion-disclaimer">No es una matriz de correlación estadística (necesitaría series históricas por par) — es una vista secuencial de % de cambio del día, ordenada por huso horario (Asia → Rusia → EE.UU.), para ver a simple vista si el impulso de una sesión se sostuvo en la siguiente o si hubo divergencia. Útil como disparador de análisis Intermarket (CMT), no como señal de entrada.</div>
+    </div>
+  </div>
+
+  <!-- ══ EARNINGS TAB ══ -->
+  <div id="tab-earnings" class="tab-content">
+    <div class="section-title">Earnings — Watchlist de research</div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Próximos Earnings</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Finnhub · calendario</span>
+      </div>
+      <div id="earnings-panel" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
     </div>
   </div>
 
@@ -1226,6 +1435,7 @@ setInterval(fetchPrices, 60000); // refresh cada 60s
 // CSV IMPORT
 // ══════════════════════════════════════
 let trades = [];
+let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
   const file = e.target.files[0];
@@ -1276,6 +1486,18 @@ function parseCSV(text) {
   renderAll();
 }
 
+// Restaurar cuenta activa desde localStorage (antes del CSV, para que el primer renderAll ya filtre)
+(function restoreCuentaActiva() {
+  try {
+    const saved = localStorage.getItem('pei_cuenta_activa');
+    if (saved) {
+      cuentaActiva = saved;
+      const sel = document.getElementById('selector-cuenta');
+      if (sel) sel.value = cuentaActiva;
+    }
+  } catch(e) {}
+})();
+
 // Restaurar CSV desde localStorage al cargar la página
 (function restoreCSV() {
   try {
@@ -1296,6 +1518,11 @@ function col(trade, ...names) {
   return '';
 }
 
+function getTradesFiltrados() {
+  if (cuentaActiva === 'todas') return trades;
+  return trades.filter(t => String(col(t,'cuenta') || '').toLowerCase().includes(cuentaActiva.toLowerCase()));
+}
+
 function renderAll() {
   renderKPIs();
   renderEquity();
@@ -1310,15 +1537,16 @@ function renderAll() {
 }
 
 function renderKPIs() {
-  const closed = trades.filter(t => {
+  const data = getTradesFiltrados();
+  const closed = data.filter(t => {
     const r = col(t, 'resultado').toUpperCase();
     return r === 'GANADA' || r === 'PERDIDA' || r === 'BREAKEVEN';
   });
-  const ganadas = trades.filter(t => col(t, 'resultado').toUpperCase() === 'GANADA');
-  const perdidas = trades.filter(t => col(t, 'resultado').toUpperCase() === 'PERDIDA');
-  const enCurso  = trades.filter(t => col(t, 'resultado', 'estado').toUpperCase() === 'EN CURSO');
+  const ganadas = data.filter(t => col(t, 'resultado').toUpperCase() === 'GANADA');
+  const perdidas = data.filter(t => col(t, 'resultado').toUpperCase() === 'PERDIDA');
+  const enCurso  = data.filter(t => col(t, 'resultado', 'estado').toUpperCase() === 'EN CURSO');
 
-  const pnls = trades.map(t => parseFloat(col(t, 'p&l','pnl','resultado (r)')) || 0).filter(v => v !== 0);
+  const pnls = data.map(t => parseFloat(col(t, 'p&l','pnl','resultado (r)')) || 0).filter(v => v !== 0);
   const totalPnl = pnls.reduce((a,b) => a+b, 0);
   const wr = closed.length ? (ganadas.length / (ganadas.length + perdidas.length) * 100) : 0;
 
@@ -1329,11 +1557,11 @@ function renderKPIs() {
     : 0;
 
   // Best/Worst
-  const pnlTrades = trades.filter(t => col(t,'p&l','pnl') !== '');
+  const pnlTrades = data.filter(t => col(t,'p&l','pnl') !== '');
   const best  = pnlTrades.reduce((a,b) => (parseFloat(col(b,'p&l','pnl'))||0) > (parseFloat(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
   const worst = pnlTrades.reduce((a,b) => (parseFloat(col(b,'p&l','pnl'))||0) < (parseFloat(col(a,'p&l','pnl'))||0) ? b : a, pnlTrades[0] || {});
 
-  set('kpi-total', trades.length || '—');
+  set('kpi-total', data.length || '—');
   set('kpi-open',  `${enCurso.length} en curso`);
   set('kpi-wr',    closed.length ? wr.toFixed(1) + '%' : '—');
   set('kpi-wr-sub', `${ganadas.length} G · ${perdidas.length} P`);
@@ -1360,11 +1588,12 @@ function set(id, val) {
 }
 
 function renderEquity() {
+  const data = getTradesFiltrados();
   const svg = document.getElementById('equity-svg');
   const pts = [];
   let cum = 0;
 
-  trades.forEach((t, i) => {
+  data.forEach((t, i) => {
     const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
     cum += pnl;
     pts.push({ x: i, y: cum });
@@ -1412,15 +1641,16 @@ function renderEquity() {
 }
 
 function renderTrades() {
+  const data = getTradesFiltrados();
   const tbody = document.getElementById('trades-body');
-  document.getElementById('trade-count').textContent = `(${trades.length})`;
+  document.getElementById('trade-count').textContent = `(${data.length})`;
 
-  if (!trades.length) {
+  if (!data.length) {
     tbody.innerHTML = `<tr><td colspan="15" style="text-align:center;color:var(--text-muted);padding:40px">Sin trades cargados</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = [...trades].reverse().map(t => {
+  tbody.innerHTML = [...data].reverse().map(t => {
     const res = col(t,'resultado').toUpperCase();
     const badgeClass = res === 'GANADA' ? 'badge-green' : res === 'PERDIDA' ? 'badge-red' : res === 'EN CURSO' ? 'badge-blue' : res === 'BREAKEVEN' ? 'badge-yellow' : 'badge-gray';
     const pnl = col(t,'p&l','pnl');
@@ -1449,9 +1679,10 @@ function renderTrades() {
 }
 
 function renderActivoBars() {
+  const data = getTradesFiltrados();
   const cont = document.getElementById('activo-bars');
   const map = {};
-  trades.forEach(t => {
+  data.forEach(t => {
     const a = col(t,'activo');
     const pnl = parseFloat(col(t,'p&l','pnl')) || 0;
     if (!a) return;
@@ -1474,9 +1705,10 @@ function renderActivoBars() {
 }
 
 function renderSistema() {
+  const data = getTradesFiltrados();
   const cont = document.getElementById('sistema-chart');
-  const tesla = trades.filter(t => col(t,'sistema','d').toUpperCase() === 'TESLA');
-  const maleta = trades.filter(t => col(t,'sistema','d').toUpperCase() === 'MALETA');
+  const tesla = data.filter(t => col(t,'sistema','d').toUpperCase() === 'TESLA');
+  const maleta = data.filter(t => col(t,'sistema','d').toUpperCase() === 'MALETA');
 
   if (!tesla.length && !maleta.length) {
     cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:40px 0">Sin datos</div>`;
@@ -1554,16 +1786,18 @@ function renderCalendar() {
 }
 
 function renderDistribucion() {
-  renderMiniBar('sesion-bars', ['Londres','Nueva York','Asia','Solapamiento'], t => col(t,'sesión','sesion'));
-  renderMiniBar('cuenta-bars', ['CMC Demo','MT5 Demo','CMC Live','MT5 Live'], t => col(t,'cuenta'));
+  const data = getTradesFiltrados();
+  renderMiniBar('sesion-bars', ['Londres','Nueva York','Asia','Solapamiento'], t => col(t,'sesión','sesion'), data);
+  renderMiniBar('cuenta-bars', ['CMC Demo','MT5 Demo','CMC Live','MT5 Live'], t => col(t,'cuenta'), data);
 }
 
-function renderMiniBar(id, categories, getter) {
+function renderMiniBar(id, categories, getter, data) {
+  data = data || trades;
   const cont = document.getElementById(id);
   const map = {};
   categories.forEach(c => map[c] = 0);
-  trades.forEach(t => { const v = getter(t); if (map[v] !== undefined) map[v]++; });
-  const total = trades.length || 1;
+  data.forEach(t => { const v = getter(t); if (map[v] !== undefined) map[v]++; });
+  const total = data.length || 1;
   cont.innerHTML = categories.map(c => {
     const pct = map[c] / total * 100;
     return `<div class="bar-row" style="margin-bottom:6px">
@@ -1978,6 +2212,73 @@ function renderMetricasSistema(id, data, color) {
     </div>`;
 }
 
+function renderSesgoActivo() {
+  const el = document.getElementById('metricas-sesgo');
+  if (!el) return;
+
+  // Agrupar trades por ACTIVO (case-insensitive, trim)
+  const grupos = {};
+  trades.forEach(t => {
+    const activo = (col(t,'activo') || '—').trim().toUpperCase();
+    if (!grupos[activo]) grupos[activo] = [];
+    grupos[activo].push(t);
+  });
+
+  // Calcular métricas por activo, descartar los sin trades cerrados
+  const filas = Object.keys(grupos).map(activo => {
+    const data = calcSistema(grupos[activo]);
+    return { activo, ...data };
+  }).filter(f => f.closed > 0);
+
+  if (!filas.length) {
+    el.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin trades cerrados todavía</div>`;
+    return;
+  }
+
+  // Ordenar por Win Rate descendente — arriba lo que mejor te sale, abajo lo que peor
+  filas.sort((a,b) => b.wr - a.wr);
+
+  const mejorWR = filas[0].wr;
+  const peorWR = filas[filas.length-1].wr;
+
+  const rows = filas.map(f => {
+    const wrColor = f.wr >= 50 ? 'var(--green)' : 'var(--red)';
+    const pnlColor = f.totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+    const pfColor = f.profitFactor >= 1 ? 'var(--green)' : 'var(--red)';
+    const esMejor = f.wr === mejorWR && filas.length > 1;
+    const esPeor = f.wr === peorWR && filas.length > 1;
+    const tag = esMejor ? ' <span style="font-size:8px;color:var(--green);border:1px solid var(--green);padding:1px 4px;letter-spacing:.05em">MEJOR</span>'
+              : esPeor ? ' <span style="font-size:8px;color:var(--red);border:1px solid var(--red);padding:1px 4px;letter-spacing:.05em">PEOR</span>' : '';
+    return `
+      <tr style="border-bottom:1px solid var(--divider)">
+        <td style="padding:8px 6px;font-size:11px">${f.activo}${tag}</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center">${f.trades}</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:${wrColor}">${f.wr.toFixed(1)}%</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:${pnlColor}">${(f.totalPnl>=0?'+':'')+f.totalPnl.toFixed(2)}R</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:${pfColor}">${f.profitFactor ? f.profitFactor.toFixed(2) : '—'}</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:var(--red)">${f.maxDD ? f.maxDD.toFixed(2)+'%' : '—'}</td>
+      </tr>`;
+  }).join('');
+
+  el.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-family:'DM Mono',monospace">
+      <thead>
+        <tr style="border-bottom:1px solid var(--border)">
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;text-align:left">Activo</th>
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">Trades</th>
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">Win Rate</th>
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">P&L Neto</th>
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">Profit Factor</th>
+          <th style="padding:6px;font-size:9px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">Max DD</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+    ${filas.length > 1 ? `<div style="font-size:9px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--divider)">
+      Estás operando ${filas.length} activos distintos. Si "${filas[filas.length-1].activo}" tiene WR bajo y racha de pérdidas seguida, considerá pausarlo hasta revisar por qué falla ahí (¿operás por impulso, no por técnica confirmada?).
+    </div>` : ''}`;
+}
+
 function renderMetricas() {
   if (!trades.length) return;
 
@@ -2035,6 +2336,9 @@ function renderMetricas() {
   const maletaData = calcSistema(trades.filter(t => col(t,'sistema','d').toUpperCase() === 'MALETA'));
   renderMetricasSistema('metricas-tesla', teslaData, 'var(--blue)');
   renderMetricasSistema('metricas-maleta', maletaData, 'var(--green)');
+
+  // Sesgo por Activo
+  renderSesgoActivo();
 
   // Prop Firm panel — global
   const globalData = calcSistema(trades);
@@ -2181,6 +2485,16 @@ function initAutoSync() {
   const btnA = document.getElementById('btnAutoSync');
   if (btnF) btnF.addEventListener('click', fijarCSV);
   if (btnA) btnA.addEventListener('click', toggleAutoSync);
+
+  const selCuenta = document.getElementById('selector-cuenta');
+  if (selCuenta) {
+    selCuenta.value = cuentaActiva;
+    selCuenta.addEventListener('change', function(e) {
+      cuentaActiva = e.target.value;
+      try { localStorage.setItem('pei_cuenta_activa', cuentaActiva); } catch(err) {}
+      renderAll();
+    });
+  }
 }
 
 
@@ -2199,18 +2513,107 @@ const FOREX_SYMBOLS = [
 const COMMODITY_SYMBOLS = ['XAU/USD','WTI/USD','BRENT/USD','COPPER/USD','NATGAS/USD'];
 const ALL_MERCADO_SYMBOLS = [...FOREX_SYMBOLS, ...COMMODITY_SYMBOLS];
 
+// ══════════════════════════════════════
+// COLA GLOBAL TWELVE DATA — respeta rate-limit Basic 8 (8 créditos/60s, 1 crédito = 1 símbolo)
+// DeepSeek R1 — 2026-08-04, auditado e integrado por Claude
+// ══════════════════════════════════════
+const TWELVE_DATA_BUDGET = 7;                // margen de seguridad bajo 8 créditos/min
+const TWELVE_DATA_WINDOW_MS = 65_000;        // 65s, margen sobre 60s reales
+let twelveDataQueue = [];
+let twelveDataProcessing = false;
+let twelveDataWindowStart = 0;
+let twelveDataCreditsUsed = 0;
+
+function enqueueTwelveData(symbols, endpoint, extraParams = {}) {
+  return new Promise((resolve, reject) => {
+    twelveDataQueue.push({ symbols, endpoint, extraParams, resolve, reject });
+    if (!twelveDataProcessing) processTwelveDataQueue();
+  });
+}
+
+async function processTwelveDataQueue() {
+  twelveDataProcessing = true;
+  while (twelveDataQueue.length > 0) {
+    const job = twelveDataQueue[0];
+    const creditsNeeded = job.symbols.length;
+    const now = Date.now();
+    if (now - twelveDataWindowStart >= TWELVE_DATA_WINDOW_MS) {
+      twelveDataWindowStart = now;
+      twelveDataCreditsUsed = 0;
+    }
+    if (twelveDataCreditsUsed + creditsNeeded > TWELVE_DATA_BUDGET) {
+      const tiempoRestante = TWELVE_DATA_WINDOW_MS - (now - twelveDataWindowStart);
+      if (tiempoRestante > 0) await new Promise(r => setTimeout(r, tiempoRestante + 100));
+      twelveDataWindowStart = Date.now();
+      twelveDataCreditsUsed = 0;
+    }
+    await ejecutarJobTwelveData(job);
+    twelveDataCreditsUsed += creditsNeeded;
+    twelveDataQueue.shift();
+  }
+  twelveDataProcessing = false;
+}
+
+async function ejecutarJobTwelveData(job) {
+  const { symbols, endpoint, extraParams, resolve, reject } = job;
+  try {
+    let url;
+    if (endpoint === 'quote') {
+      url = `https://api.twelvedata.com/quote?symbol=${encodeURIComponent(symbols.join(','))}&apikey=${TWELVE_DATA_KEY}`;
+    } else if (endpoint === 'time_series') {
+      if (symbols.length !== 1) throw new Error('time_series requiere exactamente un símbolo');
+      const urlObj = new URL(`https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(symbols[0])}&apikey=${TWELVE_DATA_KEY}`);
+      if (extraParams.interval) urlObj.searchParams.set('interval', extraParams.interval);
+      if (extraParams.outputsize) urlObj.searchParams.set('outputsize', extraParams.outputsize);
+      url = urlObj.toString();
+    } else {
+      throw new Error(`Endpoint desconocido: ${endpoint}`);
+    }
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    resolve(await res.json());
+  } catch (err) {
+    reject(err);
+  }
+}
+
+// Divide un array en grupos parejos de tamaño <= size (evita grupos de 1 símbolo,
+// que Twelve Data devuelve "desenvueltos" sin la clave del símbolo — rompería el parseo)
+function chunkSymbols(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) chunks.push(arr.slice(i, i + size));
+  return chunks;
+}
+
 let lastMercadoData = null;
 let mercadoInterval = null;
 
+let mercadoRetried = false;
+
+function mostrarErrorMercado(motivo) {
+  const msg = `<div style="color:var(--red);font-size:11px;font-family:'DM Mono',monospace">No se pudo cargar (${motivo}) — reintentando en unos segundos…</div>`;
+  const cs = document.getElementById('currency-strength');
+  const cp = document.getElementById('commodities-panel');
+  if (cs) cs.innerHTML = msg;
+  if (cp) cp.innerHTML = msg;
+  // Reintento único automático a los 8s (útil si fue rate-limit momentáneo de Twelve Data)
+  if (!mercadoRetried) {
+    mercadoRetried = true;
+    setTimeout(() => { mercadoRetried = false; fetchMercado(); }, 8000);
+  }
+}
+
 async function fetchMercado() {
-  const url = `https://api.twelvedata.com/quote?symbol=${ALL_MERCADO_SYMBOLS.join(',')}&apikey=${TWELVE_DATA_KEY}`;
   try {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    if (data.code) { console.warn('Twelve Data error:', data.message); return; }
+    // 15 símbolos > presupuesto de 7/ventana — se trocea en tandas de 5 (parejo, sin resto de 1)
+    // y cada tanda pasa por la cola global, que ya se encarga de espaciarlas en el tiempo.
+    const tandas = chunkSymbols(ALL_MERCADO_SYMBOLS, 5);
+    const respuestas = await Promise.all(tandas.map(t => enqueueTwelveData(t, 'quote')));
+    const data = Object.assign({}, ...respuestas);
+    if (data.code) { console.warn('Twelve Data error:', data.message); mostrarErrorMercado(data.message || `código ${data.code}`); return; }
     const tieneDatos = ALL_MERCADO_SYMBOLS.some(sym => data[sym]);
-    if (!tieneDatos) { console.warn('Twelve Data: respuesta vacía'); return; }
+    if (!tieneDatos) { console.warn('Twelve Data: respuesta vacía'); mostrarErrorMercado('respuesta vacía'); return; }
+    mercadoRetried = false;
     lastMercadoData = data;
     updateCurrencyStrength(data);
     updateCommodities(data);
@@ -2218,6 +2621,7 @@ async function fetchMercado() {
     if (el) el.textContent = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
   } catch (err) {
     console.error('fetchMercado error:', err);
+    mostrarErrorMercado(err.message);
   }
 }
 
@@ -2244,7 +2648,7 @@ function updateCurrencyStrength(data) {
   pairsConfig.forEach(({ pair, base, quote }) => {
     const q = data[pair];
     if (!q) return;
-    const change = parseFloat(q.change_percent) || 0;
+    const change = parseFloat(q.percent_change) || 0;
     scores[base] += change;
     scores[quote] -= change;
   });
@@ -2293,7 +2697,7 @@ function updateCommodities(data) {
     const q = data[sym];
     if (!q) return `<div class="comm-row"><span class="comm-name">${names[sym]||sym}</span><span style="color:var(--text-muted)">sin datos</span></div>`;
     const price = parseFloat(q.close) || 0;
-    const change = parseFloat(q.change_percent) || 0;
+    const change = parseFloat(q.percent_change) || 0;
     const arrow = change >= 0 ? '▲' : '▼';
     const color = change >= 0 ? 'var(--green)' : 'var(--red)';
     return `
@@ -2305,10 +2709,170 @@ function updateCommodities(data) {
   }).join('');
 }
 
+// ══════════════════════════════════════
+// RVOL — Volumen Relativo (contexto macro)
+// DeepSeek R1 — 2026-08-03, auditado e integrado por Claude
+// ══════════════════════════════════════
+const RVOL_SYMBOLS = ['SPY', 'QQQ', 'XAU/USD', 'WTI/USD'];
+let rvolCache = {};
+
+async function fetchRVOL() {
+  const promises = RVOL_SYMBOLS.map(async (sym) => {
+    try {
+      const data = await enqueueTwelveData([sym], 'time_series', { interval: '1day', outputsize: '21' });
+      if (data.code || data.status === 'error') return { sym, error: true };
+      const values = data.values;
+      if (!values || values.length < 2) return { sym, error: true };
+      const volHoy = parseInt(values[0].volume, 10) || 0;
+      const prev20 = values.slice(1, 21);
+      const sum20 = prev20.reduce((acc, v) => acc + (parseInt(v.volume, 10) || 0), 0);
+      const volProm20d = prev20.length > 0 ? sum20 / prev20.length : 0;
+      const rvolRatio = volProm20d > 0 ? volHoy / volProm20d : 0;
+      return { sym, rvolRatio, volHoy, volProm20d, error: false };
+    } catch (err) {
+      console.warn(`RVOL fetch error para ${sym}:`, err.message);
+      return { sym, error: true };
+    }
+  });
+  const results = await Promise.all(promises);
+  results.forEach(({ sym, rvolRatio, volHoy, volProm20d, error }) => {
+    rvolCache[sym] = { rvolRatio: rvolRatio || 0, volHoy: volHoy || 0, volProm20d: volProm20d || 0, error };
+  });
+  renderRVOL(rvolCache);
+}
+
+function renderRVOL(data) {
+  const container = document.getElementById('rvol-panel');
+  if (!container) return;
+  let html = '';
+  for (const sym of RVOL_SYMBOLS) {
+    const d = data[sym];
+    if (!d || d.error) {
+      html += `<div class="rvol-row"><span class="rvol-sym">${sym}</span><span class="rvol-ratio" style="color:var(--text-muted)">sin datos</span></div>`;
+      continue;
+    }
+    const ratio = d.rvolRatio;
+    const ratioStr = ratio >= 10 ? ratio.toFixed(0) + 'x' : ratio.toFixed(1) + 'x';
+    const isAlert = ratio > 2;
+    html += `<div class="rvol-row ${isAlert ? 'rvol-alert' : ''}">
+      <span class="rvol-sym">${sym}</span>
+      <span class="rvol-ratio" style="color:${isAlert ? 'var(--red)' : 'var(--text-primary)'}">${ratioStr}</span>
+      ${isAlert ? '<span class="rvol-alert-tag">Volumen inusual</span>' : ''}
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+// ══════════════════════════════════════
+// EARNINGS — Watchlist de research
+// DeepSeek R1 — 2026-08-03, auditado e integrado por Claude
+// ══════════════════════════════════════
+const EARNINGS_WATCHLIST = [
+  { symbol: 'AAPL', name: 'Apple' },
+  { symbol: 'TSLA', name: 'Tesla' },
+  { symbol: 'NKE',  name: 'Nike' },
+  { symbol: 'CRM',  name: 'Salesforce' },
+  { symbol: 'C',    name: 'Citi' },
+  { symbol: 'BABA', name: 'Alibaba' },
+];
+
+let earningsLoaded = false;
+
+async function fetchEarnings() {
+  // Finnhub sin from/to usa ventana default de 3 días — casi nunca cae justo en un reporte.
+  // Rango amplio: 90 días atrás (último reportado) a 180 días adelante (próximo estimado).
+  const desde = new Date(); desde.setDate(desde.getDate() - 90);
+  const hasta = new Date(); hasta.setDate(hasta.getDate() + 180);
+  const desdeStr = desde.toISOString().slice(0, 10);
+  const hastaStr = hasta.toISOString().slice(0, 10);
+
+  const promises = EARNINGS_WATCHLIST.map(async ({ symbol, name }) => {
+    try {
+      const url = `https://finnhub.io/api/v1/calendar/earnings?symbol=${symbol}&from=${desdeStr}&to=${hastaStr}&token=${FINNHUB_KEY}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (!data.earningsCalendar || data.earningsCalendar.length === 0) {
+        return { symbol, name, error: true };
+      }
+      const hoy = new Date();
+      hoy.setHours(0, 0, 0, 0);
+      let mejor = null;
+      let mejorDiff = Infinity;
+      for (const entry of data.earningsCalendar) {
+        if (!entry.date) continue;
+        const fecha = new Date(entry.date + 'T00:00:00');
+        if (isNaN(fecha.getTime())) continue;
+        const diff = Math.abs(fecha - hoy) / (1000 * 60 * 60 * 24);
+        if (diff < mejorDiff) { mejorDiff = diff; mejor = entry; }
+      }
+      if (!mejor) return { symbol, name, error: true };
+      return { symbol, name, closest: mejor, diffDays: Math.round(mejorDiff), error: false };
+    } catch (err) {
+      console.warn(`Earnings fetch error para ${symbol}:`, err.message);
+      return { symbol, name, error: true };
+    }
+  });
+
+  const results = await Promise.all(promises);
+  const dataMap = {};
+  results.forEach(r => { dataMap[r.symbol] = r; });
+  renderEarnings(dataMap);
+}
+
+function renderEarnings(dataMap) {
+  const container = document.getElementById('earnings-panel');
+  if (!container) return;
+  let html = '';
+  const hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+
+  for (const { symbol, name } of EARNINGS_WATCHLIST) {
+    const item = dataMap[symbol];
+    if (!item || item.error) {
+      html += `<div class="earnings-row"><span class="earnings-name">${name}</span><span class="earnings-date" style="color:var(--text-muted)">sin datos</span></div>`;
+      continue;
+    }
+    const entry = item.closest;
+    const fecha = new Date(entry.date + 'T00:00:00');
+    const diffDays = Math.round((fecha - hoy) / (1000 * 60 * 60 * 24));
+    const esFuturo = fecha >= hoy;
+    const estaSemana = Math.abs(diffDays) <= 7;
+    const fechaStr = entry.date;
+
+    let detalleEPS = '';
+    if (entry.epsActual !== null && entry.epsActual !== undefined) {
+      detalleEPS = `EPS real: ${entry.epsActual}`;
+    } else if (entry.epsEstimate !== null && entry.epsEstimate !== undefined) {
+      detalleEPS = `EPS est: ${entry.epsEstimate}`;
+    }
+
+    const estado = esFuturo ? 'Estimado' : 'Reportado';
+    const claseAlerta = estaSemana ? 'earnings-week' : '';
+
+    html += `<div class="earnings-row ${claseAlerta}">
+      <span class="earnings-name">${name}</span>
+      <span class="earnings-date">${fechaStr} ${estaSemana ? '●' : ''}</span>
+      <span class="earnings-estado" style="color:${esFuturo ? 'var(--text-muted)' : 'var(--green)'}">${estado}</span>
+      <span class="earnings-eps">${detalleEPS}</span>
+    </div>`;
+  }
+  container.innerHTML = html;
+}
+
+function initEarningsTab() {
+  if (earningsLoaded) return;
+  fetchEarnings().then(() => { earningsLoaded = true; });
+}
+
 function initMercadoTab() {
   if (mercadoInterval) return;
   fetchMercado();
-  mercadoInterval = setInterval(fetchMercado, 300_000);
+  setTimeout(fetchRVOL, 3000); // escalonado 3s para no saturar el límite por minuto de Twelve Data
+  mercadoInterval = setInterval(() => {
+    fetchMercado();
+    setTimeout(fetchRVOL, 3000);
+  }, 300_000);
 }
 
 // ══ INDICES TAB ══
@@ -2516,14 +3080,11 @@ async function fetchYahoo(yahooSym) {
 
 async function fetchIndicesLive() {
   // Twelve Data para índices americanos (SPX, RUT, SOX)
-  const usSymbols = INDICES_CONFIG.filter(c => !YAHOO_SYMBOLS[c.id]).map(c => c.sym12).join(',');
+  const usSymbols = INDICES_CONFIG.filter(c => !YAHOO_SYMBOLS[c.id]).map(c => c.sym12);
   let twData = null;
-  if (usSymbols) {
+  if (usSymbols.length) {
     try {
-      const url = `https://api.twelvedata.com/quote?symbol=${usSymbols}&apikey=${TWELVE_KEY}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
+      const d = await enqueueTwelveData(usSymbols, 'quote');
       if (!d.code) twData = d;
     } catch(e) { console.warn('Twelve Data error:', e.message); }
   }
@@ -2573,6 +3134,54 @@ async function initIndicesTab() {
 
   const el = document.getElementById('indices-last-update');
   if (el) el.textContent = 'Actualizado: ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+
+  lastIndicesData = updated;
+  renderRotacionMercados(updated);
+}
+
+// ══════════════════════════════════════
+// ROTACIÓN DE MERCADOS — Secuencia de aperturas (Intermarket, CMT)
+// Claude — 2026-08-03. Reusa datos de initIndicesTab(), sin llamadas nuevas a APIs.
+// ══════════════════════════════════════
+let lastIndicesData = null;
+
+// Orden real de apertura por huso horario (aprox, hora ARG): Asia primero, luego Rusia, luego EE.UU.
+const ORDEN_APERTURA = [
+  { id: 'csi300', horaArg: '21:30 (día previo)' },
+  { id: 'hstech', horaArg: '21:30 (día previo)' },
+  { id: 'moex',   horaArg: '03:00' },
+  { id: 'spx',    horaArg: '10:30' },
+  { id: 'rut',    horaArg: '10:30' },
+  { id: 'sox',    horaArg: '10:30' },
+];
+
+function renderRotacionMercados(updated) {
+  const container = document.getElementById('rotacion-mercados-panel');
+  if (!container) return;
+  if (!updated || !updated.length) {
+    container.innerHTML = `<div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Sin datos</div>`;
+    return;
+  }
+
+  const byId = {};
+  updated.forEach(({cfg, priceData}) => { byId[cfg.id] = { cfg, priceData }; });
+
+  const rows = ORDEN_APERTURA.map(({ id, horaArg }) => {
+    const entry = byId[id];
+    if (!entry) return '';
+    const { cfg, priceData } = entry;
+    const change = parseFloat(priceData?.change) || 0;
+    const color = change > 0 ? 'var(--green)' : change < 0 ? 'var(--red)' : 'var(--text-muted)';
+    const arrow = change > 0 ? '▲' : change < 0 ? '▼' : '—';
+    return `<div class="rotacion-row">
+      <span class="rotacion-hora">${horaArg}</span>
+      <span class="rotacion-flag">${cfg.flag}</span>
+      <span class="rotacion-nombre">${cfg.name}</span>
+      <span class="rotacion-change" style="color:${color}">${arrow} ${Math.abs(change).toFixed(2)}%</span>
+    </div>`;
+  }).join('');
+
+  container.innerHTML = rows || `<div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Sin datos</div>`;
 }
 
 // Init calendar on load
