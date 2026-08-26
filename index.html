@@ -992,6 +992,20 @@ body {
       </div>
     </div>
 
+    <!-- Resumen mensual / anual -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Resumen Mensual — Año calendario</span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <select id="resumen-anio" onchange="renderResumenMensual()" style="background:var(--bg-subtle);color:var(--text-primary);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace;font-size:10px"></select>
+          <button onclick="exportarResumenAnual()" style="background:var(--bg-subtle);color:var(--text-secondary);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer">↓ Exportar CSV</button>
+        </span>
+      </div>
+      <div id="resumen-mensual">
+        <div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Cargá el CSV para ver el resumen mensual</div>
+      </div>
+    </div>
+
     <!-- Fila 3: Prop Firm Progress -->
     <div class="card">
       <div class="card-title">Prop Firm Challenge — 100K Account</div>
@@ -1161,7 +1175,7 @@ body {
           title="Calendario económico — eventos de alto impacto">
         </iframe>
         <div style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-top:8px;padding-top:8px;border-top:1px solid var(--divider)">
-          ⚠ La alerta automática 30min antes de un evento (parpadeo del panel) NO está implementada todavía — el contenido del iframe es de otro dominio (investing.com) y JS no puede leer su DOM por política del navegador (cross-origin). Para tener alertas reales hace falta una API de calendario económico que devuelva los eventos en JSON (ej. TradingEconomics, FMP, Finnhub calendar) — evaluar cuál conviene antes de programar esa parte. Mientras tanto: revisar el panel manualmente al empezar la jornada.
+          ⚠ La alerta automática 30min antes de un evento (parpadeo del panel) NO está implementada — el contenido del iframe es de otro dominio (investing.com) y JS no puede leer su DOM por política del navegador (cross-origin). Fuentes de calendario en JSON evaluadas y descartadas el 26/08/2026: <b>Finnhub</b> <code>/calendar/economic</code> responde "You don't have access to this resource" (premium, probado con la key válida de 40 chars); <b>TradingEconomics</b> no tiene tier gratis con API (desde USD 39/mes); <b>Investing.com</b> y <b>TradingView</b> no exponen API pública de calendario ni con cuenta paga — solo widget embebido, mismo problema de cross-origin. Única opción gratis pendiente de probar: <b>Financial Modeling Prep</b> (250 req/día, requiere cuenta y key nueva). Mientras tanto: revisar el panel manualmente al empezar la jornada.
         </div>
       </div>
     </div>
@@ -1254,7 +1268,13 @@ function showTab(tab) {
 // PRECIOS — Multi-source: Frankfurter (forex) + Finnhub (equities) + MOEX + Static
 // ══════════════════════════════════════
 
-const FINNHUB_KEY = 'd74v8h1r01qg1eo710mg';
+// ⚠ La key de Finnhub es de 40 caracteres. Hasta el 26/08/2026 estaba guardada acá
+// solo la segunda mitad ('d74v8h1r01qg1eo710mg') — las dos mitades son casi idénticas
+// (terminan en 'm0' y 'mg'), así que el recorte pasó desapercibido meses. Finnhub
+// respondía {"error":"Invalid API key."} y el dashboard lo tapaba con || 0 / "sin datos":
+// eso rompía Earnings, los precios de S&P500/NASDAQ y el calendario económico a la vez.
+// Si algún día vuelve a fallar, verificar PRIMERO que la key tenga 40 chars.
+const FINNHUB_KEY = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
 
 // Definición de símbolos con su fuente correcta
 const ALL_SYMS = [
@@ -1532,6 +1552,7 @@ function renderAll() {
   renderCalendar();
   renderDistribucion();
   renderMetricas();
+  renderResumenMensual();
   renderCuentasPanels();
   renderAnalisis();
 }
@@ -1783,6 +1804,173 @@ function renderCalendar() {
     </div>`;
   }
   grid.innerHTML = cells;
+}
+
+// ══════════════════════════════════════
+// RESUMEN MENSUAL / ANUAL
+// Calculado en vivo desde los trades cargados — no guarda estado propio,
+// así no puede desincronizarse del Excel (misma lección del bug de P&L).
+// ══════════════════════════════════════
+const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+// Convierte "0,33%" / "1,00%" / "0.33" a fracción decimal (0.0033)
+function parseRiesgo(valor) {
+  if (valor === undefined || valor === null) return null;
+  let s = String(valor).trim();
+  if (!s) return null;
+  const tienePct = s.includes('%');
+  s = s.replace('%','').replace(',','.').trim();
+  const n = parseFloat(s);
+  if (isNaN(n)) return null;
+  // Con % explícito, o sin % pero >= 0.1, se asume notación porcentual ("0,33%" y "0.33" -> 0.0033).
+  // Por debajo de 0.1 ya viene como fracción decimal (0.0033 del xlsx, 0.01 = 1%) y se deja igual.
+  return (tienePct || n >= 0.1) ? n / 100 : n;
+}
+
+function agruparPorMes(data, anio) {
+  const meses = MESES_ABREV.map(() => ({ r: 0, pct: 0, trades: 0, ganadas: 0, perdidas: 0, sinRiesgo: 0 }));
+  data.forEach(t => {
+    const fechaRaw = col(t, 'fecha');
+    if (!fechaRaw) return;
+    const d = new Date(fechaRaw);
+    if (isNaN(d.getTime()) || d.getFullYear() !== anio) return;
+
+    const res = String(col(t, 'resultado') || '').toUpperCase();
+    if (res !== 'GANADA' && res !== 'PERDIDA' && res !== 'BREAKEVEN') return;
+
+    const m = meses[d.getMonth()];
+    const pnl = parseFloat(String(col(t, 'p&l', 'pnl')).replace(',', '.')) || 0;
+    m.r += pnl;
+    m.trades++;
+    if (res === 'GANADA') m.ganadas++;
+    if (res === 'PERDIDA') m.perdidas++;
+
+    const riesgo = parseRiesgo(col(t, 'riesgo'));
+    if (riesgo === null) m.sinRiesgo++;
+    else m.pct += pnl * riesgo * 100; // R × riesgo% = % real de cuenta
+  });
+  return meses;
+}
+
+function aniosDisponibles() {
+  const set = new Set();
+  trades.forEach(t => {
+    const f = col(t, 'fecha');
+    if (!f) return;
+    const d = new Date(f);
+    if (!isNaN(d.getTime())) set.add(d.getFullYear());
+  });
+  if (!set.size) set.add(new Date().getFullYear());
+  return [...set].sort((a, b) => b - a);
+}
+
+function renderResumenMensual() {
+  const cont = document.getElementById('resumen-mensual');
+  if (!cont) return;
+
+  const sel = document.getElementById('resumen-anio');
+  const anios = aniosDisponibles();
+  if (sel && sel.options.length !== anios.length) {
+    const previo = sel.value;
+    sel.innerHTML = anios.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (previo && anios.includes(Number(previo))) sel.value = previo;
+  }
+  const anio = sel && sel.value ? Number(sel.value) : anios[0];
+
+  const data = getTradesFiltrados();
+  const meses = agruparPorMes(data, anio);
+  const conDatos = meses.filter(m => m.trades > 0);
+
+  if (!conDatos.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin trades cerrados en ${anio}</div>`;
+    return;
+  }
+
+  const totalR = meses.reduce((a, m) => a + m.r, 0);
+  const totalPct = meses.reduce((a, m) => a + m.pct, 0);
+  const totalTrades = meses.reduce((a, m) => a + m.trades, 0);
+  const totalGan = meses.reduce((a, m) => a + m.ganadas, 0);
+  const totalPer = meses.reduce((a, m) => a + m.perdidas, 0);
+  const wrAnual = (totalGan + totalPer) ? (totalGan / (totalGan + totalPer) * 100) : 0;
+  const faltanRiesgo = meses.reduce((a, m) => a + m.sinRiesgo, 0);
+
+  const celdas = meses.map((m, i) => {
+    const vacio = m.trades === 0;
+    const color = vacio ? 'var(--text-muted)' : (m.r > 0 ? 'var(--green)' : m.r < 0 ? 'var(--red)' : 'var(--text-secondary)');
+    const fondo = vacio ? 'transparent' : (m.r > 0 ? 'var(--green-bg)' : m.r < 0 ? 'var(--red-bg)' : 'var(--bg-subtle)');
+    const signo = m.r >= 0 ? '+' : '';
+    return `<div style="border:1px solid var(--border);border-radius:3px;padding:8px 6px;background:${fondo};text-align:center">
+      <div style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">${MESES_ABREV[i]}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:15px;color:${color}">${vacio ? '—' : signo + m.r.toFixed(2) + 'R'}</div>
+      <div style="font-family:'DM Mono',monospace;font-size:10px;color:${vacio ? 'var(--text-muted)' : color}">${vacio ? '' : signo + m.pct.toFixed(2) + '%'}</div>
+      <div style="font-size:9px;color:var(--text-muted);margin-top:3px">${vacio ? '' : m.trades + (m.trades === 1 ? ' trade' : ' trades')}</div>
+    </div>`;
+  }).join('');
+
+  const colTotal = totalR > 0 ? 'var(--green)' : totalR < 0 ? 'var(--red)' : 'var(--text-secondary)';
+  const sg = totalR >= 0 ? '+' : '';
+
+  cont.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:8px;padding:8px 0">${celdas}</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:16px;border-top:1px solid var(--divider);margin-top:12px;padding-top:12px">
+      <div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Total ${anio} (R)</div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;color:${colTotal}">${sg}${totalR.toFixed(2)}R</div>
+      </div>
+      <div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Total ${anio} (%)</div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;color:${colTotal}">${sg}${totalPct.toFixed(2)}%</div>
+      </div>
+      <div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Trades</div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;color:var(--text-primary)">${totalTrades}</div>
+      </div>
+      <div>
+        <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Win Rate</div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;color:var(--text-primary)">${wrAnual.toFixed(1)}%</div>
+      </div>
+    </div>
+    <div style="font-size:9px;color:var(--text-muted);line-height:1.5;margin-top:10px;border-top:1px solid var(--divider);padding-top:8px">
+      El % de cuenta se calcula por trade como P&amp;L(R) × RIESGO% de esa operación, no con un riesgo fijo — por eso es fiel aunque mezcles 0,33% y 1%.
+      ${faltanRiesgo ? `<br>⚠ ${faltanRiesgo} trade(s) de ${anio} sin columna RIESGO% cargada: suman en R pero no en %.` : ''}
+    </div>`;
+}
+
+function exportarResumenAnual() {
+  const sel = document.getElementById('resumen-anio');
+  const anio = sel && sel.value ? Number(sel.value) : new Date().getFullYear();
+  const meses = agruparPorMes(getTradesFiltrados(), anio);
+
+  const filas = [['AÑO', 'MES', 'R TOTAL', '% CUENTA', 'TRADES', 'GANADAS', 'PERDIDAS', 'WIN RATE %']];
+  meses.forEach((m, i) => {
+    if (!m.trades) return;
+    const wr = (m.ganadas + m.perdidas) ? (m.ganadas / (m.ganadas + m.perdidas) * 100) : 0;
+    filas.push([anio, MESES_ABREV[i], m.r.toFixed(2), m.pct.toFixed(2), m.trades, m.ganadas, m.perdidas, wr.toFixed(1)]);
+  });
+
+  if (filas.length === 1) { alert(`No hay trades cerrados en ${anio} para exportar.`); return; }
+
+  const tG = meses.reduce((a, m) => a + m.ganadas, 0);
+  const tP = meses.reduce((a, m) => a + m.perdidas, 0);
+  filas.push([
+    anio, 'TOTAL',
+    meses.reduce((a, m) => a + m.r, 0).toFixed(2),
+    meses.reduce((a, m) => a + m.pct, 0).toFixed(2),
+    meses.reduce((a, m) => a + m.trades, 0), tG, tP,
+    ((tG + tP) ? (tG / (tG + tP) * 100) : 0).toFixed(1)
+  ]);
+
+  // Delimitador ';' y coma decimal — mismo formato ARG que ya usa el Excel
+  const csv = filas.map(f => f.map(v => String(v).replace('.', ',')).join(';')).join('\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `resumen_anual_${anio}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderDistribucion() {
