@@ -1265,7 +1265,7 @@ function showTab(tab) {
 }
 
 // ══════════════════════════════════════
-// PRECIOS — Multi-source: Frankfurter (forex) + Finnhub (equities) + MOEX + Static
+// PRECIOS — Multi-source: exchangerate-api.com (forex, ex-Frankfurter — ver fix 28/08) + Finnhub (equities) + MOEX + Static
 // ══════════════════════════════════════
 
 // ⚠ La key de Finnhub es de 40 caracteres. Hasta el 26/08/2026 estaba guardada acá
@@ -1299,15 +1299,15 @@ function parseNumAR(valor) {
 
 // Definición de símbolos con su fuente correcta
 const ALL_SYMS = [
-  { sym: 'EUR/USD', source: 'frankfurter', fxSym: 'EUR' },
-  { sym: 'GBP/USD', source: 'frankfurter', fxSym: 'GBP' },
-  { sym: 'USD/JPY', source: 'frankfurter', fxSym: 'JPY', invert: true },
+  { sym: 'EUR/USD', source: 'fxrate', fxSym: 'EUR' },
+  { sym: 'GBP/USD', source: 'fxrate', fxSym: 'GBP' },
+  { sym: 'USD/JPY', source: 'fxrate', fxSym: 'JPY', invert: true },
   { sym: 'GBP/JPY', source: 'cross',       fxA: 'GBP', fxB: 'JPY' },
   { sym: 'GBP/CAD', source: 'cross',       fxA: 'GBP', fxB: 'CAD' },
-  { sym: 'AUD/USD', source: 'frankfurter', fxSym: 'AUD' },
-  { sym: 'USD/CHF', source: 'frankfurter', fxSym: 'CHF', invert: true },
+  { sym: 'AUD/USD', source: 'fxrate', fxSym: 'AUD' },
+  { sym: 'USD/CHF', source: 'fxrate', fxSym: 'CHF', invert: true },
   { sym: 'EUR/CAD', source: 'cross',       fxA: 'EUR', fxB: 'CAD' },
-  { sym: 'NZD/USD', source: 'frankfurter', fxSym: 'NZD' },
+  { sym: 'NZD/USD', source: 'fxrate', fxSym: 'NZD' },
   { sym: 'AUD/CHF', source: 'cross',       fxA: 'AUD', fxB: 'CHF' },
   { sym: 'XAU/USD', source: 'static',      staticPrice: 4518.00, staticChg: -0.38 }, // 29/05/2026
   { sym: 'S&P 500', source: 'finnhub',     fhSym: 'SPY' },
@@ -1328,13 +1328,20 @@ const SYMBOLS = [
 ];
 
 let priceData = {};
-let _fxCache = null; // Cache Frankfurter (1 sola llamada por ciclo)
+let _fxCache = null; // Cache de rates FX (1 sola llamada por ciclo)
 
-// Frankfurter: 1 request trae TODOS los pares desde USD
-async function fetchFrankfurterAll() {
+// exchangerate-api.com: 1 request trae TODOS los pares desde USD (ex-Frankfurter, ver fix 28/08)
+async function fetchFxRatesAll() {
   if (_fxCache) return _fxCache;
   try {
-    const res = await fetch('https://api.frankfurter.app/latest?from=USD');
+    // Frankfurter (api.frankfurter.app) bloquea CORS para pedritozar.github.io desde
+    // hace un tiempo (confirmado en consola: "No 'Access-Control-Allow-Origin' header") —
+    // por eso los pares FX quedaban en "Cargando..." eterno en el tab Precios, sin importar
+    // cuánto se esperara. exchangerate-api.com/v4 devuelve el mismo esquema JSON
+    // (base/date/rates), así que es reemplazo directo sin tocar getFXPrice() ni nada río abajo.
+    // Igual que Frankfurter: rates diarias (ECB-like), no tick a tick — por eso chg queda null
+    // acá abajo, sin cambios respecto al comportamiento previo. Fix 28/08.
+    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
     _fxCache = await res.json();
     return _fxCache;
   } catch(e) { return null; }
@@ -1344,7 +1351,7 @@ function getFXPrice(rates, sym, invert) {
   if (!rates) return null;
   const rate = rates.rates[sym];
   if (!rate) return null;
-  // Frankfurter devuelve USD/XXX → para XXX/USD invertimos
+  // La API devuelve USD/XXX → para XXX/USD invertimos
   return invert ? rate : 1 / rate;
 }
 
@@ -1394,8 +1401,8 @@ async function fetchPrices() {
   renderPriceSkeleton();
   _fxCache = null; // Reset cache por ciclo
 
-  // 1 sola llamada Frankfurter para todos los pares forex
-  const fxRates = await fetchFrankfurterAll();
+  // 1 sola llamada para todos los pares forex
+  const fxRates = await fetchFxRatesAll();
 
   // Procesar cada símbolo según su fuente
   for (const s of ALL_SYMS) {
@@ -1405,13 +1412,13 @@ async function fetchPrices() {
       price = s.staticPrice;
       chg   = s.staticChg;
 
-    } else if (s.source === 'frankfurter') {
-      // Para JPY: Frankfurter da USD/JPY directamente (no invertir)
+    } else if (s.source === 'fxrate') {
+      // Para JPY: la API da USD/JPY directamente (no invertir)
       if (s.sym === 'USD/JPY') {
         const rate = fxRates?.rates?.['JPY'];
         if (rate) { price = rate; chg = null; }
       } else {
-        // Para XXX/USD: Frankfurter da USD/XXX → invertir
+        // Para XXX/USD: la API da USD/XXX → invertir
         const rate = fxRates?.rates?.[s.fxSym];
         if (rate) { price = 1 / rate; chg = null; }
       }
