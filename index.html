@@ -779,13 +779,13 @@ body {
 
 <!-- NAV -->
 <div class="nav">
-  <button class="nav-btn active" onclick="showTab('overview')">Overview</button>
-  <button class="nav-btn" onclick="showTab('trades')">Trades</button>
-  <button class="nav-btn" onclick="showTab('metricas')">Métricas</button>
-  <button class="nav-btn" onclick="showTab('precios')">Precios</button>
-  <button class="nav-btn" onclick="showTab('mercado'); if(!mercadoInterval) initMercadoTab();">Mercado</button>
-  <button class="nav-btn" onclick="showTab('indices'); if(!indicesLoaded) initIndicesTab();">Índices</button>
-  <button class="nav-btn" onclick="showTab('earnings'); if(!earningsLoaded) initEarningsTab();">Earnings</button>
+  <button class="nav-btn active" onclick="showTab('overview', this)">Overview</button>
+  <button class="nav-btn" onclick="showTab('trades', this)">Trades</button>
+  <button class="nav-btn" onclick="showTab('metricas', this)">Métricas</button>
+  <button class="nav-btn" onclick="showTab('precios', this)">Precios</button>
+  <button class="nav-btn" onclick="showTab('mercado', this); if(!mercadoInterval) initMercadoTab();">Mercado</button>
+  <button class="nav-btn" onclick="showTab('indices', this); if(!indicesLoaded) initIndicesTab();">Índices</button>
+  <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
 </div>
 
 <!-- MAIN -->
@@ -1257,11 +1257,18 @@ updateClock();
 // ══════════════════════════════════════
 // TABS
 // ══════════════════════════════════════
-function showTab(tab) {
+// Bug real 28/08: dependía del global `event.target` (window.event, no estándar) para
+// marcar el botón activo. Chrome lo tolera casi siempre; Safari no lo garantiza en el
+// mismo call path — el resultado era un TypeError silencioso que cortaba el onclick a
+// mitad de camino, así que el `if(!mercadoInterval) initMercadoTab();` (y los análogos
+// de Índices/Earnings) nunca llegaban a ejecutarse. Por eso esos tabs quedaban en
+// "Cargando..." para siempre en Safari, sin ningún error de red de por medio.
+// Fix: el botón se pasa explícito (`this` desde el onclick), sin tocar ningún global.
+function showTab(tab, btn) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
-  event.target.classList.add('active');
+  if (btn) btn.classList.add('active');
 }
 
 // ══════════════════════════════════════
