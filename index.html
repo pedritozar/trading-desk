@@ -1238,6 +1238,7 @@ body {
 <div class="status-bar">
   <span><span class="status-dot"></span>PEI TRADING DESK</span>
   <span id="status-data">Sin datos cargados</span>
+  <span id="status-puente" style="color:var(--text-muted)"></span>
   <span style="margin-left:auto" id="status-time"></span>
 </div>
 
@@ -1590,6 +1591,7 @@ function renderAll() {
   renderResumenMensual();
   renderCuentasPanels();
   renderAnalisis();
+  actualizarResumenPEISYS();
 }
 
 function renderKPIs() {
@@ -2411,6 +2413,54 @@ function calcSistema(tradeArr) {
   const { maxDD } = calcDrawdown(pnls);
   const { maxWin, maxLoss, rachaActual, rachaActualType } = calcRachas(tradeArr);
   return { closed: closed.length, ganadas: ganadas.length, perdidas: perdidas.length, wr, totalPnl, avgWin, avgLoss, profitFactor, maxDD, maxWin, maxLoss, rachaActual, rachaActualType, trades: tradeArr.length };
+}
+
+// ══════════════════════════════════════
+// PUENTE TRADING → PEI·SYS (resumen_trading)
+// ══════════════════════════════════════
+function filtrarPorRangoFecha(tradeArr, desde) {
+  return tradeArr.filter(t => {
+    const f = new Date(col(t,'fecha'));
+    return !isNaN(f) && f >= desde;
+  });
+}
+
+async function actualizarResumenPEISYS() {
+  if (!trades.length) return;
+  if (typeof window.peisysSetDoc !== 'function') return;
+  try {
+    const hoy = new Date();
+    const inicioSemana = new Date(hoy);
+    inicioSemana.setDate(hoy.getDate() - hoy.getDay());
+    inicioSemana.setHours(0,0,0,0);
+    const inicioMes  = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const inicioAnio = new Date(hoy.getFullYear(), 0, 1);
+
+    const semana = calcSistema(filtrarPorRangoFecha(trades, inicioSemana));
+    const mes    = calcSistema(filtrarPorRangoFecha(trades, inicioMes));
+    const anio   = calcSistema(filtrarPorRangoFecha(trades, inicioAnio));
+    const global = calcSistema(trades);
+
+    const resumen = {
+      rachaActual: global.rachaActual,
+      rachaActualType: global.rachaActualType,
+      maxWinGlobal: global.maxWin,
+      maxLossGlobal: global.maxLoss,
+      winRateSemana: semana.wr, pnlSemana: semana.totalPnl, tradesSemana: semana.trades,
+      winRateMes: mes.wr, pnlMes: mes.totalPnl, tradesMes: mes.trades,
+      winRateAnio: anio.wr, pnlAnio: anio.totalPnl, tradesAnio: anio.trades,
+      tradesTotal: global.trades,
+      actualizado: new Date().toISOString()
+    };
+
+    await window.peisysSetDoc('resumen_trading', 'actual', resumen);
+    const el = document.getElementById('status-puente');
+    if (el) el.textContent = '⬡ PEI·SYS ' + new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.warn('Puente PEI·SYS: no se pudo actualizar resumen_trading', e);
+    const el = document.getElementById('status-puente');
+    if (el) el.textContent = '✕ PEI·SYS sync error';
+  }
 }
 
 function renderMetricasSistema(id, data, color) {
@@ -3408,6 +3458,36 @@ function renderRotacionMercados(updated) {
 // Init calendar on load
 renderCalendar();
 initAutoSync();
+</script>
+<script type="module">
+  // ══════════════════════════════════════
+  // PUENTE TRADING → PEI·SYS — cliente Firebase de solo-escritura
+  // Mismo proyecto Firebase que PEI·SYS (peisys). Escribe únicamente en
+  // la colección 'resumen_trading', doc 'actual'. No lee nada de Firestore.
+  // ══════════════════════════════════════
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyAGfXyBG1OuoOyNgtdmLNvXHq1WD2MsnRo",
+    authDomain: "peisys.firebaseapp.com",
+    projectId: "peisys",
+    storageBucket: "peisys.firebasestorage.app",
+    messagingSenderId: "184043509465",
+    appId: "1:184043509465:web:7b63cc777be505a5ec50c8",
+    measurementId: "G-C2FCBET465"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+
+  window.peisysSetDoc = (col, id, data) => setDoc(doc(db, col, id), data, { merge: true });
+
+  // Al terminar de cargar el módulo, sincronizar el resumen ya calculado
+  // (por si los trades se restauraron desde localStorage antes de que este script corriera).
+  window.addEventListener('DOMContentLoaded', () => {
+    if (typeof window.actualizarResumenPEISYS === 'function') window.actualizarResumenPEISYS();
+  });
 </script>
 </body>
 </html>
