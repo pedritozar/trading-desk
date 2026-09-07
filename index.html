@@ -52,6 +52,18 @@
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* ══ INFO TOOLTIPS (educativo) ══ */
+.info-btn{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;border-radius:50%;border:1px solid var(--border-strong);color:var(--text-muted);font-size:9px;font-family:'DM Mono',monospace;cursor:pointer;margin-left:6px;flex-shrink:0;user-select:none;transition:.15s;vertical-align:middle}
+.info-btn:hover{border-color:var(--accent);color:var(--accent)}
+.tooltip-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.tooltip-ov.open{display:flex}
+.tooltip-box{background:var(--bg-card);border:1px solid var(--border-strong);border-radius:10px;padding:20px;max-width:420px;width:100%;max-height:80vh;overflow-y:auto}
+.tooltip-box-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:10px}
+.tooltip-box h3{font-family:'Libre Baskerville',serif;font-size:15px;color:var(--text-primary);font-weight:700}
+.tooltip-box-close{cursor:pointer;color:var(--text-muted);font-size:13px;font-family:'DM Mono',monospace;flex-shrink:0}
+.tooltip-box-close:hover{color:var(--text-primary)}
+.tooltip-box p{font-size:12px;line-height:1.65;color:var(--text-secondary)}
+
 body {
   background: var(--bg);
   color: var(--text-primary);
@@ -824,7 +836,7 @@ body {
         <div class="kpi-sub" id="kpi-pnl-sub">resultado acumulado</div>
       </div>
       <div class="kpi-card">
-        <div class="kpi-label">Expectancy</div>
+        <div class="kpi-label">Expectancy <span class="info-btn" onclick="showInfo('expectancy')">i</span></div>
         <div class="kpi-value" id="kpi-exp">—</div>
         <div class="kpi-sub">R por trade promedio</div>
       </div>
@@ -1023,7 +1035,7 @@ body {
           <div style="font-family:'DM Mono',monospace;font-size:20px;color:var(--text-primary)" id="pf-wr">—</div>
         </div>
         <div>
-          <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Profit Factor</div>
+          <div style="font-size:9px;letter-spacing:0.1em;color:var(--text-muted);text-transform:uppercase;margin-bottom:6px">Profit Factor <span class="info-btn" onclick="showInfo('profitfactor')">i</span></div>
           <div style="font-family:'DM Mono',monospace;font-size:20px;color:var(--text-primary)" id="pf-factor">—</div>
         </div>
       </div>
@@ -1032,7 +1044,7 @@ body {
     <!-- Fila 4: Kelly Criterion -->
     <div class="card" style="margin-top:16px">
       <div class="card-title">
-        <span>Kelly Criterion — Position Sizing Óptimo</span>
+        <span>Kelly Criterion — Position Sizing Óptimo <span class="info-btn" onclick="showInfo('kelly')">i</span></span>
         <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Prop firm constraint: 8% DD · 250 trades</span>
       </div>
       <div id="kelly-panel" style="display:grid;grid-template-columns:1fr 1fr;gap:24px;padding:8px 0">
@@ -1107,7 +1119,7 @@ body {
       <!-- Currency Strength -->
       <div class="card">
         <div class="card-title">
-          <span>Currency Strength Meter</span>
+          <span>Currency Strength Meter <span class="info-btn" onclick="showInfo('currency')">i</span></span>
           <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Twelve Data · 8 divisas</span>
         </div>
         <div id="currency-strength" style="padding:8px 0">
@@ -1131,7 +1143,7 @@ body {
     <!-- RVOL — Volumen Relativo -->
     <div class="card" style="margin-top:16px">
       <div class="card-title">
-        <span>Volumen Relativo (RVOL)</span>
+        <span>Volumen Relativo (RVOL) <span class="info-btn" onclick="showInfo('rvol')">i</span></span>
         <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">Twelve Data · contexto macro</span>
       </div>
       <div id="rvol-panel" style="padding:8px 0">
@@ -1242,7 +1254,55 @@ body {
   <span style="margin-left:auto" id="status-time"></span>
 </div>
 
+<!-- TOOLTIP EDUCATIVO -->
+<div class="tooltip-ov" id="tooltip-ov" onclick="if(event.target===this) hideInfo()">
+  <div class="tooltip-box">
+    <div class="tooltip-box-head">
+      <h3 id="tooltip-title"></h3>
+      <span class="tooltip-box-close" onclick="hideInfo()">cerrar ✕</span>
+    </div>
+    <p id="tooltip-text"></p>
+  </div>
+</div>
+
 <script>
+// ══════════════════════════════════════
+// INFO TOOLTIPS (educativo)
+// ══════════════════════════════════════
+const INFO_TEXTS = {
+  expectancy: {
+    title: 'Expectancy',
+    text: 'Cuánto esperás ganar (o perder) en promedio por cada trade, en R, contando ganadoras y perdedoras juntas. Se calcula como (Win Rate × Ganancia promedio) − (Loss Rate × Pérdida promedio). Positivo y sostenido en el tiempo es la señal de que el sistema tiene ventaja real, más allá de cómo salga un trade suelto.'
+  },
+  profitfactor: {
+    title: 'Profit Factor',
+    text: 'Plata ganada dividido plata perdida, sumando todos los trades cerrados. Un valor mayor a 1 significa que en total ganás más de lo que perdés. Por debajo de 1,5 el sistema es frágil ante una mala racha; arriba de 2 se considera sólido.'
+  },
+  kelly: {
+    title: 'Kelly Criterion',
+    text: 'Fórmula que calcula qué % de la cuenta arriesgar por trade para maximizar el crecimiento compuesto de largo plazo, según tu win rate y tu ratio ganancia/pérdida promedio. El Kelly completo es matemáticamente óptimo pero muy agresivo (drawdowns violentos) — por eso se usa Half Kelly (mitad) o Quarter Kelly (un cuarto), y siempre el mínimo entre eso y el límite de drawdown de la prop firm.'
+  },
+  currency: {
+    title: 'Currency Strength Meter',
+    text: 'Mide qué tan fuerte o débil viene cada divisa comparándola contra el resto de la canasta, no contra un solo par. Sirve para elegir el cruce con más sesgo direccional: por ejemplo, si USD es la más fuerte y JPY la más débil, USD/JPY es el par con más "jugo" direccional del momento.'
+  },
+  rvol: {
+    title: 'RVOL — Volumen Relativo',
+    text: 'Compara el volumen operado hoy contra el promedio de días anteriores. RVOL alto (1,5x-2x o más) señala interés institucional real detrás del movimiento de precio. RVOL bajo sugiere que el movimiento puede ser ruido, más fácil que se revierta.'
+  }
+};
+
+function showInfo(key) {
+  const info = INFO_TEXTS[key];
+  if (!info) return;
+  document.getElementById('tooltip-title').textContent = info.title;
+  document.getElementById('tooltip-text').textContent = info.text;
+  document.getElementById('tooltip-ov').classList.add('open');
+}
+
+function hideInfo() {
+  document.getElementById('tooltip-ov').classList.remove('open');
+}
 // ══════════════════════════════════════
 // CLOCK
 // ══════════════════════════════════════
