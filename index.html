@@ -3215,6 +3215,48 @@ const EARNINGS_WATCHLIST = [
 
 let earningsLoaded = false;
 
+// ══════════════════════════════════════
+// HISTÓRICO PERPETUO DE EARNINGS (patrón "Banco IPC" de Macro Argentina)
+// Cada Q ya reportado (epsActual real, no estimado) se guarda UNA sola vez en
+// Firestore (colección earnings_hist, mismo proyecto peisys del puente de arriba).
+// Con el tiempo esto arma un histórico propio sin depender de cuánto rango para
+// atrás deje traer el free tier de Finnhub -- se completa solo, en cada visita al
+// tab Earnings, con la data que Finnhub ya devuelve en el fetch normal (sin
+// requests extra). Base para la vista "por año → trimestre" ya speada en el
+// CHANGELOG ("Próxima sesión — Histórico de Earnings por Q"), que no se construye
+// en esta sesión -- esto deja la data lista para cuando se construya.
+// ⚠ Requiere que las Firestore Rules de peisys permitan write en earnings_hist
+// (hoy solo está confirmado abierto resumen_trading) -- si nunca aparece nada
+// guardado, revisar eso primero.
+function quarterDeFecha(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return null;
+  return { year: d.getFullYear(), q: Math.floor(d.getMonth() / 3) + 1 };
+}
+
+async function persistEarningsHist(symbol, name, entry) {
+  if (entry.epsActual === null || entry.epsActual === undefined) return; // solo Q ya reportados, no estimados
+  if (typeof window.peisysSetDoc !== 'function') return;
+  const qInfo = quarterDeFecha(entry.date);
+  if (!qInfo) return;
+  const docId = `${symbol}_${entry.date}`;
+  try {
+    await window.peisysSetDoc('earnings_hist', docId, {
+      symbol, name,
+      fecha: entry.date,
+      year: qInfo.year,
+      quarter: qInfo.q,
+      epsActual: entry.epsActual,
+      epsEstimate: entry.epsEstimate ?? null,
+      revenueActual: entry.revenueActual ?? null,
+      revenueEstimate: entry.revenueEstimate ?? null,
+      actualizado: new Date().toISOString()
+    });
+  } catch (e) {
+    console.warn(`earnings_hist: no se pudo guardar ${docId}`, e);
+  }
+}
+
 async function fetchEarnings() {
   // Finnhub sin from/to usa ventana default de 3 días — casi nunca cae justo en un reporte.
   // Rango amplio: 90 días atrás (último reportado) a 180 días adelante (próximo estimado).
@@ -3244,6 +3286,10 @@ async function fetchEarnings() {
         if (diff < mejorDiff) { mejorDiff = diff; mejor = entry; }
       }
       if (!mejor) return { symbol, name, error: true };
+
+      // Persistencia perpetua: todos los Q reportados de este fetch, no solo "mejor"
+      data.earningsCalendar.forEach(e => persistEarningsHist(symbol, name, e));
+
       return { symbol, name, closest: mejor, diffDays: Math.round(mejorDiff), error: false };
     } catch (err) {
       console.warn(`Earnings fetch error para ${symbol}:`, err.message);
