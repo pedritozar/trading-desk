@@ -1524,10 +1524,20 @@ function parseCSV(text) {
   const headers = rawHeaders.slice(colOffset);
 
   trades = [];
+  // Dedup por firma: fila completa (todas las columnas, en orden) idéntica a una ya cargada
+  // desde este mismo CSV -- protege contra copiar/pegar un rango duplicado desde Excel antes
+  // de exportar. No protege contra reimportar el mismo CSV dos veces -- eso ya está cubierto
+  // porque parseCSV() reemplaza trades[] entero cada vez (no es un import incremental).
+  const firmasVistas = new Set();
+  let duplicadosSalteados = 0;
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const rawVals = lines[i].split(delim).map(v => v.trim().replace(/"/g,''));
     const vals = rawVals.slice(colOffset);
     if (vals.every(v => !v)) continue;
+
+    const firma = vals.join('|');
+    if (firmasVistas.has(firma)) { duplicadosSalteados++; continue; }
+    firmasVistas.add(firma);
 
     const t = {};
     headers.forEach((h, idx) => { t[h] = vals[idx] || ''; });
@@ -1538,7 +1548,11 @@ function parseCSV(text) {
   try { localStorage.setItem('pei_csv_backup', text); } catch(e) {}
 
   const statusEl = document.getElementById('status-data');
-  if (statusEl) statusEl.textContent = `${trades.length} trades cargados`;
+  if (statusEl) {
+    statusEl.textContent = duplicadosSalteados > 0
+      ? `${trades.length} trades cargados (${duplicadosSalteados} duplicado${duplicadosSalteados>1?'s':''} salteado${duplicadosSalteados>1?'s':''})`
+      : `${trades.length} trades cargados`;
+  }
   renderAll();
 }
 
