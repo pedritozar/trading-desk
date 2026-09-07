@@ -64,6 +64,14 @@
 .tooltip-box-close:hover{color:var(--text-primary)}
 .tooltip-box p{font-size:12px;line-height:1.65;color:var(--text-secondary)}
 
+/* ══ CONFIG PANEL ══ */
+.config-row{margin-bottom:16px;max-width:480px}
+.config-label{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
+.config-input{width:100%;background:var(--bg-subtle);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:8px 10px;font-family:'DM Mono',monospace;font-size:12px;outline:none}
+.config-input:focus{border-color:var(--accent)}
+.config-warn{font-size:11px;color:var(--red);margin-top:5px}
+.config-hint{font-size:11px;color:var(--text-muted);margin-top:5px}
+
 body {
   background: var(--bg);
   color: var(--text-primary);
@@ -798,6 +806,7 @@ body {
   <button class="nav-btn" onclick="showTab('mercado', this); if(!mercadoInterval) initMercadoTab();">Mercado</button>
   <button class="nav-btn" onclick="showTab('indices', this); if(!indicesLoaded) initIndicesTab();">Índices</button>
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
+  <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
 </div>
 
 <!-- MAIN -->
@@ -1244,6 +1253,34 @@ body {
     </div>
   </div>
 
+  <!-- ══ CONFIG TAB ══ -->
+  <div id="tab-config" class="tab-content">
+    <div class="section-title">Config — API Keys</div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Claves de API</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">se guardan en este navegador, no en el archivo</span>
+      </div>
+      <div style="padding:8px 0">
+        <div class="config-row">
+          <label class="config-label">Finnhub API Key (Earnings, calendario, S&amp;P500/NASDAQ)</label>
+          <input type="text" id="cfg-finnhub" class="config-input" spellcheck="false" placeholder="40 caracteres" oninput="checkFinnhubLen()">
+          <div id="cfg-finnhub-warn" class="config-warn" style="display:none">⚠ Esta key tiene <span id="cfg-finnhub-len"></span> caracteres — Finnhub las emite de 40. Revisá que no se haya copiado a medias (ya pasó una vez, ver CHANGELOG 26/08).</div>
+        </div>
+        <div class="config-row">
+          <label class="config-label">Twelve Data API Key (Forex, Índices, RVOL, Commodities)</label>
+          <input type="text" id="cfg-twelvedata" class="config-input" spellcheck="false" placeholder="API key de Twelve Data">
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigKeys()">Guardar</button>
+          <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="restaurarConfigDefaults()">Restaurar valores por defecto</button>
+          <span id="cfg-status" style="font-size:11px;color:var(--green)"></span>
+        </div>
+        <div class="config-hint">Los cambios se aplican de inmediato (sin recargar) para los próximos fetch. Si el campo queda vacío, se usa la key por defecto guardada en el archivo.</div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- STATUS BAR -->
@@ -1325,6 +1362,59 @@ updateClock();
 // de Índices/Earnings) nunca llegaban a ejecutarse. Por eso esos tabs quedaban en
 // "Cargando..." para siempre en Safari, sin ningún error de red de por medio.
 // Fix: el botón se pasa explícito (`this` desde el onclick), sin tocar ningún global.
+function initConfigTab() {
+  const fEl = document.getElementById('cfg-finnhub');
+  const tEl = document.getElementById('cfg-twelvedata');
+  if (fEl) fEl.value = FINNHUB_KEY;
+  if (tEl) tEl.value = TWELVE_DATA_KEY;
+  checkFinnhubLen();
+}
+
+function checkFinnhubLen() {
+  const fEl = document.getElementById('cfg-finnhub');
+  const warn = document.getElementById('cfg-finnhub-warn');
+  const lenSpan = document.getElementById('cfg-finnhub-len');
+  if (!fEl || !warn) return;
+  const len = fEl.value.trim().length;
+  if (len > 0 && len !== 40) {
+    lenSpan.textContent = len;
+    warn.style.display = 'block';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+function guardarConfigKeys() {
+  const fVal = (document.getElementById('cfg-finnhub').value || '').trim();
+  const tVal = (document.getElementById('cfg-twelvedata').value || '').trim();
+
+  if (fVal) { localStorage.setItem('pei_finnhub_key', fVal); FINNHUB_KEY = fVal; }
+  else { localStorage.removeItem('pei_finnhub_key'); FINNHUB_KEY = FINNHUB_KEY_DEFAULT; }
+
+  if (tVal) { localStorage.setItem('pei_twelvedata_key', tVal); TWELVE_DATA_KEY = tVal; }
+  else { localStorage.removeItem('pei_twelvedata_key'); TWELVE_DATA_KEY = TWELVE_DATA_KEY_DEFAULT; }
+
+  checkFinnhubLen();
+  const status = document.getElementById('cfg-status');
+  if (status) {
+    status.textContent = `✓ Guardado ${new Date().toLocaleTimeString('es-AR')}`;
+    setTimeout(() => { status.textContent = ''; }, 4000);
+  }
+}
+
+function restaurarConfigDefaults() {
+  localStorage.removeItem('pei_finnhub_key');
+  localStorage.removeItem('pei_twelvedata_key');
+  FINNHUB_KEY = FINNHUB_KEY_DEFAULT;
+  TWELVE_DATA_KEY = TWELVE_DATA_KEY_DEFAULT;
+  initConfigTab();
+  const status = document.getElementById('cfg-status');
+  if (status) {
+    status.textContent = 'Restaurado a valores por defecto';
+    setTimeout(() => { status.textContent = ''; }, 4000);
+  }
+}
+
 function showTab(tab, btn) {
   document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
@@ -1342,7 +1432,8 @@ function showTab(tab, btn) {
 // respondía {"error":"Invalid API key."} y el dashboard lo tapaba con || 0 / "sin datos":
 // eso rompía Earnings, los precios de S&P500/NASDAQ y el calendario económico a la vez.
 // Si algún día vuelve a fallar, verificar PRIMERO que la key tenga 40 chars.
-const FINNHUB_KEY = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
+const FINNHUB_KEY_DEFAULT = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
+let FINNHUB_KEY = localStorage.getItem('pei_finnhub_key') || FINNHUB_KEY_DEFAULT;
 
 // ⚠ MESES_ABREV va acá arriba a propósito: `restoreCSV()` corre apenas carga la
 // página (mucho antes de este punto del archivo) y termina llamando a
@@ -2848,7 +2939,8 @@ function initAutoSync() {
 // DeepSeek R1 — 2026-06-01 · Twelve Data API
 // ══════════════════════════════════════
 
-const TWELVE_DATA_KEY = '3e257ff3e9e14bd6bb24f2d7bd0e57c3';
+const TWELVE_DATA_KEY_DEFAULT = '3e257ff3e9e14bd6bb24f2d7bd0e57c3';
+let TWELVE_DATA_KEY = localStorage.getItem('pei_twelvedata_key') || TWELVE_DATA_KEY_DEFAULT;
 
 const FOREX_SYMBOLS = [
   'EUR/USD','GBP/USD','AUD/USD','NZD/USD',
@@ -3221,8 +3313,6 @@ function initMercadoTab() {
 }
 
 // ══ INDICES TAB ══
-
-const TWELVE_KEY = '3e257ff3e9e14bd6bb24f2d7bd0e57c3';
 
 const INDICES_CONFIG = [
   { id:'spx',    name:'S&P 500',           ticker:'SPX',    sym12:'SPX',    exchange:'',      flag:'🇺🇸', currency:'USD' },
