@@ -1782,19 +1782,17 @@ function getTradesFiltrados() {
 }
 
 function renderAll() {
-  renderKPIs();
-  renderEquity();
-  renderTrades();
-  renderActivoBars();
-  renderSistema();
-  renderCalendar();
-  renderDistribucion();
-  renderMetricas();
-  renderMetaCuenta();
-  renderResumenMensual();
-  renderCuentasPanels();
-  renderAnalisis();
-  actualizarResumenPEISYS();
+  // Cada render aislado en su propio try/catch: si uno tira excepcion (ej.
+  // Chart.js no cargo a tiempo), los demas paneles igual se actualizan en vez
+  // de quedarse todos en "Carga el CSV..." como paso el 07/09.
+  const pasos = [
+    renderKPIs, renderEquity, renderTrades, renderActivoBars, renderSistema,
+    renderCalendar, renderDistribucion, renderMetricas, renderMetaCuenta,
+    renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS
+  ];
+  for (const fn of pasos) {
+    try { fn(); } catch (e) { console.error(`renderAll: fallo ${fn.name}`, e); }
+  }
 }
 
 function renderKPIs() {
@@ -1889,12 +1887,21 @@ function renderEquity() {
     return;
   }
 
+  const lastVal = pts[pts.length - 1];
+  document.getElementById('equity-last').textContent = (lastVal >= 0 ? '+' : '') + lastVal.toFixed(2) + 'R';
+
+  if (typeof Chart === 'undefined') {
+    canvas.style.display = 'none';
+    empty.style.display = 'block';
+    empty.textContent = 'Chart.js no cargo (revisa tu conexion a internet y recarga)';
+    console.error('renderEquity: Chart.js no esta disponible (CDN no cargo)');
+    return;
+  }
+
   canvas.style.display = 'block';
   empty.style.display = 'none';
 
-  const lastVal = pts[pts.length - 1];
   const lineColor = lastVal >= 0 ? cssVar('--green') : cssVar('--red');
-  document.getElementById('equity-last').textContent = (lastVal >= 0 ? '+' : '') + lastVal.toFixed(2) + 'R';
 
   const ctx = canvas.getContext('2d');
   const gradient = ctx.createLinearGradient(0, 0, 0, canvas.clientHeight || 180);
@@ -2139,6 +2146,14 @@ function renderActivoBars() {
     canvas.style.display = 'none';
     empty.style.display = 'block';
     if (chartActivoBars) { chartActivoBars.destroy(); chartActivoBars = null; }
+    return;
+  }
+
+  if (typeof Chart === 'undefined') {
+    canvas.style.display = 'none';
+    empty.style.display = 'block';
+    empty.textContent = 'Chart.js no cargo (revisa tu conexion a internet y recarga)';
+    console.error('renderActivoBars: Chart.js no esta disponible (CDN no cargo)');
     return;
   }
 
