@@ -1280,6 +1280,11 @@ body {
           <label class="config-label">Twelve Data API Key (Forex, Índices, RVOL, Commodities)</label>
           <input type="text" id="cfg-twelvedata" class="config-input" spellcheck="false" placeholder="API key de Twelve Data">
         </div>
+        <div class="config-row">
+          <label class="config-label">Proxy CORS (Cloudflare Worker) — opcional, arregla HSTECH/MOEX/CSI300</label>
+          <input type="text" id="cfg-proxy" class="config-input" spellcheck="false" placeholder="https://tu-worker.tu-usuario.workers.dev">
+          <div class="config-hint">Sin esto, Índices sigue andando igual que hoy (SPX/RUT/SOX ok, HSTECH/MOEX/CSI300 en blanco por CORS de Yahoo Finance). Con el proxy deployado se completan los 6. Ver <code>cloudflare_worker_proxy.js</code> + instrucciones en el CHANGELOG.</div>
+        </div>
         <div style="display:flex;gap:10px;align-items:center">
           <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigKeys()">Guardar</button>
           <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="restaurarConfigDefaults()">Restaurar valores por defecto</button>
@@ -1378,8 +1383,10 @@ updateClock();
 function initConfigTab() {
   const fEl = document.getElementById('cfg-finnhub');
   const tEl = document.getElementById('cfg-twelvedata');
+  const pEl = document.getElementById('cfg-proxy');
   if (fEl) fEl.value = FINNHUB_KEY;
   if (tEl) tEl.value = TWELVE_DATA_KEY;
+  if (pEl) pEl.value = PROXY_CORS_URL;
   checkFinnhubLen();
 }
 
@@ -1407,6 +1414,10 @@ function guardarConfigKeys() {
   if (tVal) { localStorage.setItem('pei_twelvedata_key', tVal); TWELVE_DATA_KEY = tVal; }
   else { localStorage.removeItem('pei_twelvedata_key'); TWELVE_DATA_KEY = TWELVE_DATA_KEY_DEFAULT; }
 
+  const pVal = (document.getElementById('cfg-proxy').value || '').trim().replace(/\/$/, '');
+  if (pVal) { localStorage.setItem('pei_proxy_url', pVal); PROXY_CORS_URL = pVal; }
+  else { localStorage.removeItem('pei_proxy_url'); PROXY_CORS_URL = ''; }
+
   checkFinnhubLen();
   const status = document.getElementById('cfg-status');
   if (status) {
@@ -1418,8 +1429,10 @@ function guardarConfigKeys() {
 function restaurarConfigDefaults() {
   localStorage.removeItem('pei_finnhub_key');
   localStorage.removeItem('pei_twelvedata_key');
+  localStorage.removeItem('pei_proxy_url');
   FINNHUB_KEY = FINNHUB_KEY_DEFAULT;
   TWELVE_DATA_KEY = TWELVE_DATA_KEY_DEFAULT;
+  PROXY_CORS_URL = '';
   initConfigTab();
   const status = document.getElementById('cfg-status');
   if (status) {
@@ -1447,6 +1460,9 @@ function showTab(tab, btn) {
 // Si algún día vuelve a fallar, verificar PRIMERO que la key tenga 40 chars.
 const FINNHUB_KEY_DEFAULT = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
 let FINNHUB_KEY = localStorage.getItem('pei_finnhub_key') || FINNHUB_KEY_DEFAULT;
+// Proxy CORS opcional (Cloudflare Worker) -- vacío = sin proxy, comportamiento actual sin cambios.
+// Ver cloudflare_worker_proxy.js + instrucciones en el CHANGELOG para deployarlo.
+let PROXY_CORS_URL = localStorage.getItem('pei_proxy_url') || '';
 
 // ⚠ MESES_ABREV va acá arriba a propósito: `restoreCSV()` corre apenas carga la
 // página (mucho antes de este punto del archivo) y termina llamando a
@@ -3689,7 +3705,12 @@ const YAHOO_SYMBOLS = {
 async function fetchYahoo(yahooSym) {
   try {
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${yahooSym}?interval=1d&range=5d`;
-    const res = await fetch(url);
+    // Yahoo Finance bloquea CORS en fetch directo desde el browser (mismo patrón que tuvo
+    // Frankfurter). Si hay un proxy Cloudflare Worker configurado en Config, se pasa por ahí;
+    // si no, se intenta directo como hasta ahora (va a seguir fallando para HSTECH/MOEX/CSI300
+    // hasta que se configure el proxy -- comportamiento sin cambios respecto a hoy).
+    const fetchUrl = PROXY_CORS_URL ? `${PROXY_CORS_URL}/?url=${encodeURIComponent(url)}` : url;
+    const res = await fetch(fetchUrl);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const meta = json?.chart?.result?.[0]?.meta;
