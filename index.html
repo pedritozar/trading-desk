@@ -64,6 +64,18 @@
 .tooltip-box-close:hover{color:var(--text-primary)}
 .tooltip-box p{font-size:12px;line-height:1.65;color:var(--text-secondary)}
 
+/* -- PEGAR CSV (texto en vez de archivo) -- */
+.paste-csv-ov{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:200;padding:20px}
+.paste-csv-ov.open{display:flex}
+.paste-csv-box{background:var(--bg-card);border:1px solid var(--border-strong);border-radius:10px;padding:20px;max-width:640px;width:100%;max-height:85vh;display:flex;flex-direction:column;gap:12px}
+.paste-csv-box textarea{width:100%;min-height:220px;background:var(--bg-subtle);border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-family:'DM Mono',monospace;font-size:11px;line-height:1.5;padding:10px;resize:vertical}
+.paste-csv-box textarea:focus{outline:none;border-color:var(--accent)}
+.paste-csv-actions{display:flex;justify-content:flex-end;gap:8px}
+.paste-csv-actions button{background:none;border:1px solid var(--border);color:var(--text-secondary);padding:6px 14px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.06em;text-transform:uppercase;cursor:pointer;border-radius:4px;transition:all .15s}
+.paste-csv-actions button:hover{border-color:var(--text-secondary);color:var(--text-primary)}
+.paste-csv-actions button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.paste-csv-status{font-size:10px;color:var(--text-muted);font-family:'DM Mono',monospace}
+
 /* ══ CONFIG PANEL ══ */
 .config-row{margin-bottom:16px;max-width:480px}
 .config-label{display:block;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);margin-bottom:6px}
@@ -795,6 +807,7 @@ body {
         <input type="file" id="csv-input" accept=".csv" style="display:none">
         <span onclick="document.getElementById('csv-input').click()" style="cursor:pointer;padding:4px 10px;border:1px solid var(--border);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.15s;" onmouseover="this.style.borderColor='var(--text-secondary)'" onmouseout="this.style.borderColor='var(--border)'">⬆ CSV Manual</span>
       </label>
+      <span onclick="showPasteCSV()" style="cursor:pointer;padding:4px 10px;border:1px solid var(--border);font-size:10px;letter-spacing:0.08em;text-transform:uppercase;transition:all 0.15s;color:var(--text-muted);" onmouseover="this.style.borderColor='var(--text-secondary)'" onmouseout="this.style.borderColor='var(--border)'">📋 Pegar CSV</span>
       <button id="btnFijarCSV" style="background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;transition:all 0.15s;">📂 Fijar CSV</button>
       <button id="btnAutoSync" disabled style="background:none;border:1px solid var(--border);color:var(--text-muted);padding:4px 10px;font-family:'DM Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer;opacity:0.4;transition:all 0.15s;">Auto-sync OFF</button>
       <span id="syncIndicator" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);letter-spacing:0.06em;">—</span>
@@ -1314,6 +1327,21 @@ body {
 </div>
 
 <!-- TOOLTIP EDUCATIVO -->
+<div class="paste-csv-ov" id="paste-csv-ov" onclick="if(event.target===this) hidePasteCSV()">
+  <div class="paste-csv-box">
+    <div class="tooltip-box-head">
+      <h3>Pegar CSV</h3>
+      <span class="tooltip-box-close" onclick="hidePasteCSV()">cerrar ✕</span>
+    </div>
+    <p style="margin:0">Pegá el texto del CSV acá abajo (mismo formato que el archivo: encabezados fecha;activo;sistema;... separados por <code>;</code>) y hacé clic en Cargar. No hace falta guardar ningún archivo primero.</p>
+    <textarea id="paste-csv-textarea" placeholder="fecha;activo;sistema;tipo;dir;entrada;sl;tp;r/r teórico;r/r real;resultado;p&l;estado;cuenta;sesión&#10;8/20/2026;EUR/JPY;TESLA;SWING;CORTO;185,857;187,970;181,970;1,84;1,84;GANADA;1,84;CERRADA;CMC Demo;Asia"></textarea>
+    <div class="paste-csv-status" id="paste-csv-status"></div>
+    <div class="paste-csv-actions">
+      <button onclick="hidePasteCSV()">Cancelar</button>
+      <button class="primary" onclick="cargarCSVPegado()">Cargar</button>
+    </div>
+  </div>
+</div>
 <div class="tooltip-ov" id="tooltip-ov" onclick="if(event.target===this) hideInfo()">
   <div class="tooltip-box">
     <div class="tooltip-box-head">
@@ -1365,6 +1393,37 @@ function showInfo(key) {
 
 function hideInfo() {
   document.getElementById('tooltip-ov').classList.remove('open');
+}
+
+// ══════════════════════════════════════
+// PEGAR CSV (texto directo, sin archivo) -- pedido por Pedro para no tener que
+// guardar un .csv en disco primero, mismo patron que ZAR Finance. Reusa
+// parseCSV() tal cual -- cero logica de parseo nueva, mismo dedup/formato que
+// el import por archivo.
+// ══════════════════════════════════════
+function showPasteCSV() {
+  const status = document.getElementById('paste-csv-status');
+  if (status) status.textContent = '';
+  document.getElementById('paste-csv-ov').classList.add('open');
+  document.getElementById('paste-csv-textarea').focus();
+}
+
+function hidePasteCSV() {
+  document.getElementById('paste-csv-ov').classList.remove('open');
+}
+
+function cargarCSVPegado() {
+  const ta = document.getElementById('paste-csv-textarea');
+  const status = document.getElementById('paste-csv-status');
+  const text = ta.value.trim();
+  if (!text) {
+    if (status) status.textContent = 'Pegá el texto del CSV primero.';
+    return;
+  }
+  parseCSV(text);
+  const statusData = document.getElementById('status-data');
+  if (status) status.textContent = (statusData ? statusData.textContent : 'Cargado') + ' ✓';
+  setTimeout(hidePasteCSV, 900);
 }
 // ══════════════════════════════════════
 // CLOCK
@@ -1690,6 +1749,10 @@ document.getElementById('csv-input').addEventListener('change', function(e) {
     parseCSV(text);
   };
   reader.readAsText(file);
+  // Reset del value: sin esto, elegir el MISMO archivo dos veces seguidas no
+  // vuelve a disparar 'change' (comportamiento estandar del navegador) y da la
+  // sensacion de que "CSV Manual" no hizo nada.
+  e.target.value = '';
 });
 
 function parseCSV(text) {
