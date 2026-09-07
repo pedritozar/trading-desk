@@ -1050,6 +1050,15 @@ body {
       </div>
     </div>
 
+    <!-- Fila 3.5: Meta de Cuenta (curva real vs. proyectada) -->
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Meta de Cuenta <span class="info-btn" onclick="showInfo('metacuenta')">i</span></span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">progreso real vs. necesario</span>
+      </div>
+      <div id="meta-cuenta-panel" style="padding:8px 0"></div>
+    </div>
+
     <!-- Fila 4: Kelly Criterion -->
     <div class="card" style="margin-top:16px">
       <div class="card-title">
@@ -1326,6 +1335,10 @@ const INFO_TEXTS = {
   rvol: {
     title: 'RVOL — Volumen Relativo',
     text: 'Compara el volumen operado hoy contra el promedio de días anteriores. RVOL alto (1,5x-2x o más) señala interés institucional real detrás del movimiento de precio. RVOL bajo sugiere que el movimiento puede ser ruido, más fácil que se revierta.'
+  },
+  metacuenta: {
+    title: 'Meta de Cuenta',
+    text: 'Trazá una línea recta desde hoy hasta tu objetivo (en R, a una fecha) y compará contra tu curva real de P&L acumulado en ese mismo horizonte. Si la curva real está por debajo de la necesaria, el panel recalcula cuántas R por día hacen falta en lo que queda para llegar. Es el mismo patrón de "curva necesario vs. proyectado" que usás para trackear el progreso de una meta financiera, aplicado a la cuenta de trading.'
   }
 };
 
@@ -1753,6 +1766,7 @@ function renderAll() {
   renderCalendar();
   renderDistribucion();
   renderMetricas();
+  renderMetaCuenta();
   renderResumenMensual();
   renderCuentasPanels();
   renderAnalisis();
@@ -1860,6 +1874,145 @@ function renderEquity() {
     <path d="${areaD}" fill="url(#eq-grad)"/>
     <path d="${d}" fill="none" stroke="${lineColor}" stroke-width="1.5"/>
     ${pts.map((p,i) => i === pts.length-1 ? `<circle cx="${scaleX(p.x)}" cy="${scaleY(p.y)}" r="3" fill="${lineColor}"/>` : '').join('')}
+  `;
+}
+
+// ══════════════════════════════════════
+// META DE CUENTA — curva real vs. necesario
+// Patrón "Objetivos Financieros" de ZAR Finance, adaptado: acá el "aporte real" no
+// se carga a mano -- es el P&L acumulado que ya viene de los trades cargados, así
+// que no puede desincronizarse (misma lección de siempre: no guardar un estado
+// aparte de lo que ya se puede calcular). La meta en sí (nombre/monto R/fechas) se
+// guarda en localStorage -- no hace falta Firebase, es config local del dashboard.
+// ══════════════════════════════════════
+function getMetaCuenta() {
+  try {
+    const raw = localStorage.getItem('pei_meta_cuenta');
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { return null; }
+}
+
+function guardarMetaCuenta() {
+  const nombre = (document.getElementById('meta-nombre').value || '').trim();
+  const montoR = parseFloat((document.getElementById('meta-monto').value || '').replace(',', '.'));
+  const fechaInicio = document.getElementById('meta-inicio').value;
+  const fechaObjetivo = document.getElementById('meta-fin').value;
+
+  if (!nombre || !montoR || montoR <= 0 || !fechaInicio || !fechaObjetivo) {
+    alert('Completá nombre, monto objetivo en R (mayor a 0) y las dos fechas.');
+    return;
+  }
+  if (new Date(fechaObjetivo) <= new Date(fechaInicio)) {
+    alert('La fecha objetivo tiene que ser posterior a la fecha de inicio.');
+    return;
+  }
+
+  try {
+    localStorage.setItem('pei_meta_cuenta', JSON.stringify({ nombre, montoR, fechaInicio, fechaObjetivo }));
+  } catch(e) {}
+  renderMetaCuenta();
+}
+
+function eliminarMetaCuenta() {
+  if (!confirm('¿Eliminar la meta de cuenta actual?')) return;
+  try { localStorage.removeItem('pei_meta_cuenta'); } catch(e) {}
+  renderMetaCuenta();
+}
+
+function renderMetaCuenta() {
+  const panel = document.getElementById('meta-cuenta-panel');
+  if (!panel) return;
+  const meta = getMetaCuenta();
+
+  if (!meta) {
+    panel.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:640px">
+        <div class="config-row" style="grid-column:1/-1;margin-bottom:0">
+          <label class="config-label">Nombre de la meta</label>
+          <input type="text" id="meta-nombre" class="config-input" placeholder="ej. Challenge Prop Firm 100K">
+        </div>
+        <div class="config-row" style="margin-bottom:0">
+          <label class="config-label">Monto objetivo (en R)</label>
+          <input type="text" id="meta-monto" class="config-input" placeholder="ej. 20">
+        </div>
+        <div class="config-row" style="margin-bottom:0">
+          <label class="config-label">Fecha inicio</label>
+          <input type="date" id="meta-inicio" class="config-input" value="${new Date().toISOString().slice(0,10)}">
+        </div>
+        <div class="config-row" style="grid-column:1/-1;margin-bottom:0">
+          <label class="config-label">Fecha objetivo</label>
+          <input type="date" id="meta-fin" class="config-input">
+        </div>
+      </div>
+      <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px;margin-top:12px" onclick="guardarMetaCuenta()">Crear meta</button>
+    `;
+    return;
+  }
+
+  const inicio = new Date(meta.fechaInicio + 'T00:00:00');
+  const fin = new Date(meta.fechaObjetivo + 'T00:00:00');
+  const hoy = new Date(); hoy.setHours(0,0,0,0);
+  const diasTotal = Math.max(1, Math.round((fin - inicio) / 86400000));
+  const diasTranscurridos = Math.min(diasTotal, Math.max(0, Math.round((hoy - inicio) / 86400000)));
+
+  // Curva real: P&L acumulado (R) de los trades cerrados desde fechaInicio, ordenados por fecha
+  const data = getTradesFiltrados();
+  const cerrados = data
+    .map(t => ({ fecha: new Date(col(t,'fecha')), pnl: parseNumAR(col(t,'p&l','pnl')) || 0, res: String(col(t,'resultado')||'').toUpperCase() }))
+    .filter(t => !isNaN(t.fecha.getTime()) && t.fecha >= inicio && (t.res === 'GANADA' || t.res === 'PERDIDA' || t.res === 'BREAKEVEN'))
+    .sort((a,b) => a.fecha - b.fecha);
+
+  let cum = 0;
+  const realPts = [{ dia: 0, r: 0 }];
+  cerrados.forEach(t => {
+    cum += t.pnl;
+    const dia = Math.max(0, Math.min(diasTotal, Math.round((t.fecha - inicio) / 86400000)));
+    realPts.push({ dia, r: cum });
+  });
+  const rActual = cum;
+  const rNecesarioHoy = meta.montoR * (diasTranscurridos / diasTotal);
+
+  // SVG — mismo patrón que renderEquity()
+  const W = 600, H = 160, PAD = 10;
+  const maxY = Math.max(meta.montoR, rActual, 0.01);
+  const minY = Math.min(0, rActual);
+  const rangeY = (maxY - minY) || 1;
+  const scaleX = dia => PAD + (dia / diasTotal) * (W - PAD*2);
+  const scaleY = r => PAD + (1 - (r - minY) / rangeY) * (H - PAD*2);
+
+  const necesarioD = `M${scaleX(0).toFixed(1)},${scaleY(0).toFixed(1)} L${scaleX(diasTotal).toFixed(1)},${scaleY(meta.montoR).toFixed(1)}`;
+  const realD = realPts.map((p,i) => `${i===0?'M':'L'}${scaleX(p.dia).toFixed(1)},${scaleY(p.r).toFixed(1)}`).join(' ');
+
+  const vaBien = rActual >= rNecesarioHoy;
+  const diasRestantes = Math.max(1, diasTotal - diasTranscurridos);
+  const rPorDiaNecesario = Math.max(0, (meta.montoR - rActual) / diasRestantes);
+
+  let aviso;
+  if (rActual >= meta.montoR) {
+    aviso = `<span style="color:var(--green)">🏆 Meta cumplida — ${rActual.toFixed(2)}R sobre ${meta.montoR}R objetivo.</span>`;
+  } else if (vaBien) {
+    aviso = `<span style="color:var(--green)">✓ Vas en ritmo: llevás ${rActual.toFixed(2)}R, hacían falta ${rNecesarioHoy.toFixed(2)}R a esta altura.</span>`;
+  } else {
+    aviso = `<span style="color:var(--red)">⚠ Atrasado: llevás ${rActual.toFixed(2)}R, hacían falta ${rNecesarioHoy.toFixed(2)}R. Necesitás ${rPorDiaNecesario.toFixed(2)}R/día en lo que queda (${diasRestantes} días).</span>`;
+  }
+
+  panel.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px">
+      <div style="font-family:'Libre Baskerville',serif;font-size:14px">${meta.nombre}</div>
+      <div style="font-size:10px;font-family:'DM Mono',monospace;color:var(--text-muted)">${meta.fechaInicio} → ${meta.fechaObjetivo} · día ${diasTranscurridos}/${diasTotal}</div>
+    </div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:140px">
+      <line x1="${PAD}" y1="${scaleY(0).toFixed(1)}" x2="${W-PAD}" y2="${scaleY(0).toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+      <path d="${necesarioD}" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-dasharray="4,3"/>
+      <path d="${realD}" fill="none" stroke="${rActual >= 0 ? 'var(--green)' : 'var(--red)'}" stroke-width="1.5"/>
+      <circle cx="${scaleX(realPts[realPts.length-1].dia)}" cy="${scaleY(realPts[realPts.length-1].r)}" r="3" fill="${rActual >= 0 ? 'var(--green)' : 'var(--red)'}"/>
+    </svg>
+    <div style="display:flex;gap:16px;font-size:10px;color:var(--text-muted);font-family:'DM Mono',monospace;margin-bottom:8px">
+      <span>▬▬ necesario</span>
+      <span>── real (${rActual.toFixed(2)}R)</span>
+    </div>
+    <div style="font-size:12px;margin-bottom:10px">${aviso}</div>
+    <span class="tooltip-box-close" style="font-size:10px" onclick="eliminarMetaCuenta()">✕ eliminar meta</span>
   `;
 }
 
