@@ -98,6 +98,14 @@ Feature que estaba anotada como "Próxima sesión" desde el 26/08. Nueva card en
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 4ta) — Limpieza fila 32 del Excel — CERRADA, ya en tu Mac
+
+Fila 32 de la hoja DASHBOARD (`tracker_bitacora_traiding__DEFINITIVO.xlsx`) era scaffolding huérfano: 3 fórmulas (SUMIF/COUNTIF/COUNTIFS) apuntando a "RUSSELL 2000" -- activo que nunca se ejecutó (quedó como análisis en Notion) -- sin tabla ni encabezado alrededor, siempre en 0. A pedido de Pedro se borró el contenido de B32/E32/G32/I32 (no se borró la fila entera, para no correr el riesgo de desalinear otras fórmulas del sheet que referencian rangos como V5:V104). Recalculado con LibreOffice: 514 fórmulas, 0 errores. Ya escrito directo en el archivo de la Mac de Pedro -- no requiere commit ni push (el Excel no está versionado en git).
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -155,7 +163,6 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ### 🟡 Media prioridad
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
-- [ ] Fila 32 de la hoja DASHBOARD del Excel apunta a "RUSSELL 2000" (activo que ya no está en la bitácora) — cambiar por uno real o hacerla dinámica.
 - [ ] Embed del dashboard en Notion (`/embed` + URL de GitHub Pages).
 - [ ] Probar Currency Strength con mercados europeos abiertos (4AM ARG).
 - [ ] Re-rendir examen TESLA+MALETA — objetivo 9/10 (fallas previas: T1, T5, M6, ver Checklists abajo).
