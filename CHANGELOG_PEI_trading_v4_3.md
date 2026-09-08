@@ -6,7 +6,7 @@
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
 > Criterio de poda: este archivo guarda **estado actual + pendientes + lecciones que evitan repetir errores**. El detalle de sesiones ya cerradas se borra — **la sección "Lecciones" es la excepción: se actualiza, nunca se poda.**
-> **Antes de podar algo, el texto completo que se va a borrar acá se pega tal cual en `CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md`** (append-only, nunca se poda, nunca se edita lo ya escrito). Así la poda no es "borrar para siempre" — es mover el detalle a un archivo frío que se puede volver a consultar si algún día hace falta la base real de algo (por qué se tomó una decisión, el diagnóstico exacto de un bug viejo, etc.).
+> **Antes de podar algo, el texto completo que se va a borrar acá se pega tal cual en `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md`** (append-only, nunca se poda, nunca se edita lo ya escrito). Así la poda no es "borrar para siempre" — es mover el detalle a un archivo frío que se puede volver a consultar si algún día hace falta la base real de algo (por qué se tomó una decisión, el diagnóstico exacto de un bug viejo, etc.).
 
 ---
 
@@ -14,7 +14,7 @@
 
 1. Adjuntar este CHANGELOG al inicio de cada chat nuevo (el `ARCHIVO_HISTORICO` NO hace falta adjuntarlo — se consulta solo si hace falta el detalle de algo puntual)
 2. Cualquier IA lo lee primero antes de responder
-3. Al cerrar sesión importante → actualizar y **podar** lo ya resuelto (la sección "Lecciones" nunca se poda). **Antes de borrar el detalle de una sesión, copiarlo entero a `CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md`** bajo una sección nueva "## Poda YYYY-MM-DD" — recién ahí se borra del changelog principal.
+3. Al cerrar sesión importante → actualizar y **podar** lo ya resuelto (la sección "Lecciones" nunca se poda). **Antes de borrar el detalle de una sesión, copiarlo entero a `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md`** bajo una sección nueva "## Poda YYYY-MM-DD" — recién ahí se borra del changelog principal.
 4. El CHANGELOG es la fuente de verdad — prioridad sobre memoria interna
 
 ---
@@ -76,6 +76,7 @@ Commit `5ef022a` preparado en Cowork, falta que Pedro lo pushee desde su Termina
 1. **Fix RTSI sin datos** (`fetchMOEX()`): causa no era CORS (a diferencia de HSTECH/MOEX/CSI300) sino que RTSI no devuelve `marketdata` bajo el board fijo `SNDX` que sí funciona para IMOEX. Se agregó fallback: si el board fijo no trae datos, reintenta contra el endpoint sin filtro de board (devuelve `marketdata` de todos los boards donde cotiza) y toma la primera fila con valor real. No toca el camino de IMOEX. **Sin verificar en vivo** — MOEX bloquea el fetch tanto desde este sandbox como desde la Mac de Pedro (sin red en ninguna de las dos), así que el fix está razonado a partir de cómo responde la API MOEX ISS documentada, no confirmado con una respuesta real. Confirmar en el dashboard real y avisar si sigue en blanco.
 2. **Desambiguado SPY vs SPX:** tab Precios ahora dice "S&P 500 (SPY)" — el tab Índices sigue con el SPX real sin cambios. Resuelve la inconsistencia anotada en Pendientes.
 3. **`deploy.sh` arreglado:** usa `git rev-parse --show-toplevel` en vez de asumir `~/Desktop/trading-desk` — ya funciona desde sesiones Cowork.
+4. **Formalizado en git** el `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md` — estaba movido a mano a esa carpeta pero git seguía viéndolo como "borrado" de la raíz (contenido intacto, nunca se había hecho `git mv`). Registrado como rename, sin cambios de contenido. Actualizadas las referencias a la ruta nueva en este mismo archivo.
 
 ### ⚠️ Pendiente — acción manual de Pedro
 - [ ] Pushear el commit `5ef022a` desde la Terminal real (`cd ~/Desktop/trading-desk && git push origin main`).
