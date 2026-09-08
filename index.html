@@ -1538,6 +1538,16 @@ let PROXY_CORS_URL = localStorage.getItem('pei_proxy_url') || '';
 // mitad y deja sin dibujar los paneles que van después (Demo vs Live, Análisis).
 const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
 
+// ⚠ Mismo motivo que MESES_ABREV: usada por formatDD(), que renderMetricas()
+// llama en la cadena síncrona de restoreCSV() al cargar la página. Declarada
+// más abajo (con formatDD) tira "Cannot access before initialization" y corta
+// renderMetricas() a la mitad -> Tesla/Maleta/Drawdown quedan en blanco.
+const DD_MUESTRA_CHICA_R = 5;
+
+// ⚠ Mismo motivo: usada por renderAnalisis(), llamada también desde esa
+// cadena síncrona (renderAll() -> renderAnalisis()).
+let analisisView = 'torta';
+
 // Parseo numérico tolerante al formato ARG: "+2,87" -> 2.87 (parseFloat solo daría 2).
 // Bug histórico del dashboard: el CSV exporta con coma decimal y todos los P&L
 // quedaban truncados al entero, mostrando +2,00R en vez de +2,87R.
@@ -2637,7 +2647,8 @@ function buildCuentaPanel(label, arr, accentColor) {
 // ══════════════════════════════════════
 // ANÁLISIS — Distribución / Por Activo / Castigados
 // ══════════════════════════════════════
-let analisisView = 'torta';
+// analisisView también se declara arriba, junto a MESES_ABREV (mismo motivo TDZ:
+// renderAnalisis() puede correr en la cadena síncrona de restoreCSV()).
 
 function setAnalisisView(v) {
   analisisView = v;
@@ -2877,7 +2888,7 @@ function calcDrawdown(pnlArr) {
 // (ej. -0.16R de pico con -1R de caída da "-108%"). Mostramos siempre el R
 // absoluto primero -- no depende de la escala -- y el % como referencia,
 // marcando cuando el pico es chico para no leerlo como un DD real de cuenta.
-const DD_MUESTRA_CHICA_R = 5;
+// DD_MUESTRA_CHICA_R está declarada arriba, junto a MESES_ABREV (mismo motivo: TDZ).
 function formatDD(maxDD, maxDDAbs, peakAtMaxDD, compact) {
   if (!maxDDAbs) return '—';
   const rStr = maxDDAbs.toFixed(2) + 'R';

@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-08 (sesión Cowork — fix Max Drawdown + aislamiento por bloque de renderMetricas() tras reporte de Pedro de Rachas/Sesgo cayendo a "Cargá el CSV" en un refresh puntual + git tracking)
+**Última actualización:** 2026-09-08 (sesión Cowork — root cause encontrada y arreglada: TDZ en `DD_MUESTRA_CHICA_R` explicaba el "Sin datos" de Tesla/Maleta y el Drawdown en blanco; + fix Max Drawdown + aislamiento por bloque de renderMetricas() + git tracking)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,9 +42,37 @@ No se pudo reproducir en vivo desde Cowork (sin browser real con su localStorage
 Verificado con `node --check` sobre el JS extraído del HTML — sin errores. **No verificado aún en vivo** (falta que Pedro repita el refresh y confirme, y si vuelve a fallar, que mande la consola del navegador con el mensaje `renderMetricas: ...`).
 
 ### Pendiente de esta sesión
-- [ ] **Pedro: recargar el dashboard en vivo y confirmar** que Max Drawdown ahora muestra el formato nuevo (R + % + aviso de muestra chica) en Métricas y en Prop Firm Challenge.
-- [ ] **Pedro: repetir el refresh varias veces seguidas** (el bug era intermitente) y confirmar que Rachas/Sesgo/TESLA-MALETA ya no caen a "Cargá el CSV" con datos cargados. Si vuelve a pasar, abrir la consola del navegador (Cmd+Option+C) y mandar la línea que empiece con "renderMetricas: ..." — con eso se identifica la causa de raíz.
-- [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js, tab Overview) renderizan — en las últimas capturas de Pedro aparecían en blanco. Pedirle un refresh forzado (Cmd+Shift+R) y nuevas capturas.
+- [x] Max Drawdown con formato nuevo (R + % + aviso de muestra chica) — confirmado por Pedro en capturas.
+- [x] Rachas/Sesgo/TESLA-MALETA ya no caen a "Cargá el CSV" en refresh — **causa raíz encontrada y arreglada, ver sesión siguiente.**
+- [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js, tab Overview) renderizan en el Mac real de Pedro con internet — pedirle un refresh forzado (Cmd+Shift+R) y nuevas capturas.
+
+---
+
+## Sesión 2026-09-08 (cont. 2) — Root cause encontrada: TESLA/MALETA "Sin datos" + Drawdown en blanco
+
+### Reporte de Pedro
+Después del fix de aislamiento por bloque, mandó capturas nuevas: Rachas, Sesgo por Activo y Resumen Mensual ya renderizaban bien, pero las cards de **TESLA y MALETA seguían en "Sin datos"** y el label de **Drawdown global quedaba en blanco/"—"**. Pedro pidió investigar a fondo (no otro parche de superficie).
+
+### Investigación (Playwright headless contra el `index.html` real de Pedro)
+El aislamiento por bloque del fix anterior contenía el daño pero no explicaba la causa. Se armó una reproducción empírica: se bajó el `index.html` real de Pedro, se inyectó su CSV real (4 trades) en `localStorage` vía `page.addInitScript()`, y se recargó la página 40 veces en Chromium headless capturando `console.error`/`pageerror`.
+
+**Resultado: `ReferenceError: Cannot access 'DD_MUESTRA_CHICA_R' before initialization` en el 100% de los reloads (40/40).** Causa: al aplicar el fix de Max Drawdown de esta misma sesión, `const DD_MUESTRA_CHICA_R = 5` quedó declarada cerca de `formatDD()` (línea ~2880), **muy por debajo** del punto donde `restoreCSV()` corre de forma síncrona al cargar la página y dispara `renderAll() → renderMetricas() → formatDD()`. Es el mismo bug de zona muerta temporal (TDZ) que ya se había arreglado una vez para `MESES_ABREV` — con comentario explícito en el código advirtiendo sobre este patrón — y que reintroduje yo mismo al no mover la nueva constante junto a esa convención.
+
+El try/catch por bloque (fix anterior) atajaba la excepción en 3 puntos de `renderMetricas()` (drawdown SVG/label, tesla/maleta, prop firm — los tres únicos que llaman a `formatDD()`), dejando esos paneles en su placeholder por defecto ("Sin datos" / "—") mientras Rachas/Sesgo/Resumen Mensual (que no usan `formatDD()`) renderizaban bien. Esto explica el patrón exacto que reportó Pedro.
+
+De paso la misma búsqueda encontró un **segundo TDZ pre-existente, no relacionado con mi fix**: `let analisisView = 'torta'` (línea 2640) también se declara después del punto de disparo síncrono, y `renderAnalisis()` puede correr en esa misma cadena — mismo riesgo, tab Análisis.
+
+### Fix
+Se movieron ambas declaraciones (`const DD_MUESTRA_CHICA_R` y `let analisisView`) junto a `MESES_ABREV` (~línea 1539), seteando el precedente de la convención documentada: **toda constante/variable que use cualquier función llamada desde la cadena síncrona de `restoreCSV()` (que en la práctica es casi todo `renderAll()`) va declarada arriba, antes de esa cadena, nunca cerca de donde se usa.**
+
+### Verificación
+- `node --check` sobre el JS extraído: sin errores de sintaxis.
+- Re-corrida la reproducción Playwright (40 reloads, mismo CSV real de Pedro): **0/40 `ReferenceError`, 0/40 "Sin datos" en Tesla, 0/40 Drawdown en "—"**. Los únicos errores de consola remanentes son `ERR_TUNNEL_CONNECTION_FAILED` al CDN de Chart.js — artefacto del sandbox sin salida a internet real, no reproducible en el Mac de Pedro.
+- **Pendiente: confirmación visual de Pedro** en el dashboard real (recarga forzada Cmd+Shift+R) — la reproducción es sólida pero la palabra final la tiene el navegador real.
+
+### Pendiente de esta sesión
+- [ ] **Pedro: confirmar en el dashboard real** que TESLA/MALETA y el label de Drawdown ya muestran datos tras un refresh forzado.
+- [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js) renderizan con internet real — pedir capturas nuevas.
 
 ---
 
