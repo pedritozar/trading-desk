@@ -2860,16 +2860,30 @@ function calcKelly(tradesArr, sistema) {
 // ══════════════════════════════════════
 
 function calcDrawdown(pnlArr) {
-  let peak = 0, cum = 0, maxDD = 0;
+  let peak = 0, cum = 0, maxDD = 0, maxDDAbs = 0, peakAtMaxDD = 0;
   const ddSeries = [];
   pnlArr.forEach(p => {
     cum += p;
     if (cum > peak) peak = cum;
-    const dd = peak > 0 ? (cum - peak) / peak * 100 : 0;
-    if (dd < maxDD) maxDD = dd;
+    const ddAbs = cum - peak; // R absoluto (<=0)
+    const dd = peak > 0 ? (ddAbs / peak) * 100 : 0;
+    if (dd < maxDD) { maxDD = dd; maxDDAbs = ddAbs; peakAtMaxDD = peak; }
     ddSeries.push(dd);
   });
-  return { maxDD, ddSeries, finalCum: cum };
+  return { maxDD, maxDDAbs, peakAtMaxDD, ddSeries, finalCum: cum };
+}
+
+// Con pocos R acumulados (pico chico) el % de drawdown se dispara sin sentido
+// (ej. -0.16R de pico con -1R de caída da "-108%"). Mostramos siempre el R
+// absoluto primero -- no depende de la escala -- y el % como referencia,
+// marcando cuando el pico es chico para no leerlo como un DD real de cuenta.
+const DD_MUESTRA_CHICA_R = 5;
+function formatDD(maxDD, maxDDAbs, peakAtMaxDD, compact) {
+  if (!maxDDAbs) return '—';
+  const rStr = maxDDAbs.toFixed(2) + 'R';
+  const chica = peakAtMaxDD < DD_MUESTRA_CHICA_R;
+  if (compact) return `${rStr} (${maxDD.toFixed(0)}%${chica ? '⚠' : ''})`;
+  return `${rStr} (${maxDD.toFixed(1)}%${chica ? ', muestra chica' : ''})`;
 }
 
 function calcRachas(tradeArr) {
@@ -2909,9 +2923,9 @@ function calcSistema(tradeArr) {
   const avgLoss = perdidas.length ? Math.abs(perdidas.map(t=>parseNumAR(col(t,'p&l','pnl'))||0).reduce((a,b)=>a+b,0)/perdidas.length) : 0;
   const wr = closed.length ? ganadas.length/closed.length*100 : 0;
   const profitFactor = (avgLoss > 0 && perdidas.length > 0) ? (avgWin * ganadas.length) / (avgLoss * perdidas.length) : 0;
-  const { maxDD } = calcDrawdown(pnls);
+  const { maxDD, maxDDAbs, peakAtMaxDD } = calcDrawdown(pnls);
   const { maxWin, maxLoss, rachaActual, rachaActualType } = calcRachas(tradeArr);
-  return { closed: closed.length, ganadas: ganadas.length, perdidas: perdidas.length, wr, totalPnl, avgWin, avgLoss, profitFactor, maxDD, maxWin, maxLoss, rachaActual, rachaActualType, trades: tradeArr.length };
+  return { closed: closed.length, ganadas: ganadas.length, perdidas: perdidas.length, wr, totalPnl, avgWin, avgLoss, profitFactor, maxDD, maxDDAbs, peakAtMaxDD, maxWin, maxLoss, rachaActual, rachaActualType, trades: tradeArr.length };
 }
 
 // ══════════════════════════════════════
@@ -2978,7 +2992,7 @@ function renderMetricasSistema(id, data, color) {
       <div><div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Avg Loss</div><div style="font-size:14px;color:var(--red)">${data.avgLoss ? '-'+data.avgLoss.toFixed(2)+'R' : '—'}</div></div>
       <div><div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Max Racha G</div><div style="font-size:14px;color:var(--green)">${data.maxWin} seguidas</div></div>
       <div><div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Max Racha P</div><div style="font-size:14px;color:var(--red)">${data.maxLoss} seguidas</div></div>
-      <div style="grid-column:1/-1"><div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Max Drawdown</div><div style="font-size:16px;color:var(--red)">${data.maxDD ? data.maxDD.toFixed(2)+'%' : '—'}</div></div>
+      <div style="grid-column:1/-1"><div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:3px">Max Drawdown</div><div style="font-size:16px;color:var(--red)">${formatDD(data.maxDD, data.maxDDAbs, data.peakAtMaxDD)}</div></div>
     </div>`;
 }
 
@@ -3026,7 +3040,7 @@ function renderSesgoActivo() {
         <td style="padding:8px 6px;font-size:11px;text-align:center;color:${wrColor}">${f.wr.toFixed(1)}%</td>
         <td style="padding:8px 6px;font-size:11px;text-align:center;color:${pnlColor}">${(f.totalPnl>=0?'+':'')+f.totalPnl.toFixed(2)}R</td>
         <td style="padding:8px 6px;font-size:11px;text-align:center;color:${pfColor}">${f.profitFactor ? f.profitFactor.toFixed(2) : '—'}</td>
-        <td style="padding:8px 6px;font-size:11px;text-align:center;color:var(--red)">${f.maxDD ? f.maxDD.toFixed(2)+'%' : '—'}</td>
+        <td style="padding:8px 6px;font-size:11px;text-align:center;color:var(--red)">${formatDD(f.maxDD, f.maxDDAbs, f.peakAtMaxDD, true)}</td>
       </tr>`;
   }).join('');
 
@@ -3054,7 +3068,7 @@ function renderMetricas() {
 
   // Drawdown global
   const pnls = trades.map(t => parseNumAR(col(t,'p&l','pnl'))||0);
-  const { maxDD, ddSeries } = calcDrawdown(pnls);
+  const { maxDD, maxDDAbs, peakAtMaxDD, ddSeries } = calcDrawdown(pnls);
 
   // Drawdown SVG
   const svg = document.getElementById('dd-svg');
@@ -3076,7 +3090,7 @@ function renderMetricas() {
       <path d="${areaD}" fill="url(#dd-grad)"/>
       <path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.5"/>`;
   }
-  document.getElementById('dd-max-label').textContent = maxDD ? 'Max DD: ' + maxDD.toFixed(2) + '%' : '—';
+  document.getElementById('dd-max-label').textContent = maxDDAbs ? 'Max DD: ' + formatDD(maxDD, maxDDAbs, peakAtMaxDD) : '—';
 
   // Rachas globales
   const { maxWin, maxLoss, rachaActual, rachaActualType } = calcRachas(trades);
@@ -3115,7 +3129,7 @@ function renderMetricas() {
   const pfEl = document.getElementById('pf-pnl');
   pfEl.textContent = (globalData.totalPnl>=0?'+':'')+globalData.totalPnl.toFixed(2)+'R';
   pfEl.style.color = globalData.totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('pf-dd').textContent = globalData.maxDD ? globalData.maxDD.toFixed(2)+'%' : '—';
+  document.getElementById('pf-dd').textContent = formatDD(globalData.maxDD, globalData.maxDDAbs, globalData.peakAtMaxDD, true);
   document.getElementById('pf-wr').textContent = globalData.closed ? globalData.wr.toFixed(1)+'%' : '—';
   const pfFactor = document.getElementById('pf-factor');
   pfFactor.textContent = globalData.profitFactor ? globalData.profitFactor.toFixed(2) : '—';

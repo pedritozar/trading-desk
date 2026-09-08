@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-07 (sesión Cowork — 6 features + Chart.js + fix crítico de renderAll + botón "Pegar CSV" + 4 trades reales cargados. 10 commits del día, TODOS pusheados y en producción — nada pendiente de deploy)
+**Última actualización:** 2026-09-08 (sesión Cowork — fix Max Drawdown mostrando %s absurdos con pocos R cargados + git tracking de deploy.sh/CHANGELOG/fuente HTML)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -15,6 +15,24 @@
 2. Cualquier IA lo lee primero antes de responder
 3. Al cerrar sesión importante → actualizar y **podar** lo ya resuelto
 4. El CHANGELOG es la fuente de verdad — prioridad sobre memoria interna
+
+---
+
+## Sesión 2026-09-08 (Cowork) — fix Max Drawdown + git tracking
+
+### Fix: Max Drawdown mostraba % sin sentido con pocos trades
+Con solo 4 trades cargados, Métricas mostraba **Max Drawdown -108.70%** — imposible como %, pero el cálculo estaba bien: `calcDrawdown()` divide la caída (R) por el pico acumulado (R), y con un pico chico (1,84R) cualquier caída de -2R da un % gigante. No era un bug de lógica, era una unidad engañosa con muestra chica.
+
+**Fix (`calcDrawdown` + nueva `formatDD()`):** ahora se muestra siempre el **R absoluto primero** (no depende de la escala) y el % como referencia entre paréntesis, marcando "muestra chica" (⚠ en tablas compactas) cuando el pico acumulado es menor a 5R. Ej: antes `-108.70%` → ahora `-2.00R (-108.7%, muestra chica)`. Aplicado en las 4 vistas que mostraban Max Drawdown: cards TESLA/MALETA, tabla Sesgo por Activo, panel Drawdown global y Prop Firm Challenge.
+
+Verificado con `node --check` sobre el JS extraído del HTML — sin errores. No verificado aún en el navegador real (falta que Pedro recargue y confirme visualmente).
+
+### Git tracking (housekeeping de la sesión anterior, cerrado hoy)
+`deploy.sh`, el CHANGELOG y `HTML- DASBOARD/NO_ABRIR_fuente_para_editar.html` quedaron versionados (antes solo vivían en el disco del Mac). De paso se tapó un agujero: `trades_*.csv` no estaba en el `.gitignore` (solo `tracker_bitacora*.csv`), así que datos de trading reales se hubieran colado al repo público. Commit `f328d96`, pusheado por Pedro desde su Terminal real.
+
+### Pendiente de esta sesión
+- [ ] **Pedro: recargar el dashboard en vivo y confirmar** que Max Drawdown ahora muestra el formato nuevo (R + % + aviso de muestra chica) en Métricas y en Prop Firm Challenge.
+- [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js, tab Overview) renderizan — en las últimas capturas de Pedro aparecían en blanco. Pedirle un refresh forzado (Cmd+Shift+R) y nuevas capturas.
 
 ---
 
