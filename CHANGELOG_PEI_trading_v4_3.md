@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-08 (sesión Cowork — fix Max Drawdown mostrando %s absurdos con pocos R cargados + git tracking de deploy.sh/CHANGELOG/fuente HTML)
+**Última actualización:** 2026-09-08 (sesión Cowork — fix Max Drawdown + aislamiento por bloque de renderMetricas() tras reporte de Pedro de Rachas/Sesgo cayendo a "Cargá el CSV" en un refresh puntual + git tracking)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -30,8 +30,20 @@ Verificado con `node --check` sobre el JS extraído del HTML — sin errores. No
 ### Git tracking (housekeeping de la sesión anterior, cerrado hoy)
 `deploy.sh`, el CHANGELOG y `HTML- DASBOARD/NO_ABRIR_fuente_para_editar.html` quedaron versionados (antes solo vivían en el disco del Mac). De paso se tapó un agujero: `trades_*.csv` no estaba en el `.gitignore` (solo `tracker_bitacora*.csv`), así que datos de trading reales se hubieran colado al repo público. Commit `f328d96`, pusheado por Pedro desde su Terminal real.
 
+
+## Sesión 2026-09-08 (cont.) — Rachas/Sesgo por Activo caían a "Cargá el CSV" en un refresh puntual
+
+### Reporte de Pedro
+Confirmó el fix de Max Drawdown funcionando (`-2.00R (-108.7%, muestra chica)` visible en Métricas y Prop Firm). Pero mandó capturas de dos refrescos seguidos de `index.html` con los mismos 4 trades en localStorage: el primero (01:12:51) renderizaba Métricas completo; el segundo, 8 segundos después (01:12:59), mostraba Rachas y Sesgo por Activo con el placeholder "Cargá el CSV" y TESLA/MALETA en "Sin datos" — **con el mismo `trades.length` de 4** (el footer seguía mostrando "4 trades cargados" y el panel Drawdown seguía dibujando la curva). O sea: no es que se perdiera el CSV — algo dentro de `renderMetricas()` tira una excepción intermitente que corta la función a mitad de camino, dejando todo lo que viene después del punto de falla en su estado placeholder por defecto. Mismo patrón que el bug de TDZ del 07/09 (`renderAll()` se cortaba a la mitad), pero esta vez adentro de una sola función que no tenía aislamiento interno.
+
+### Fix: `renderMetricas()` con cada bloque en su propio try/catch
+No se pudo reproducir en vivo desde Cowork (sin browser real con su localStorage) para pescar el error exacto en consola, así que en vez de perseguir la causa puntual se aplicó el mismo patrón defensivo que ya usa `renderAll()`: cada bloque de `renderMetricas()` (Drawdown SVG+label, Rachas, TESLA/MALETA, Sesgo por Activo, Prop Firm, Kelly) quedó aislado en su propio `try/catch` con `console.error('renderMetricas: <bloque>', e)`. Además se agregaron guards `if (el)` antes de tocar `.textContent`/`.innerHTML` en los elementos que no los tenían. Resultado: si vuelve a pasar, cada panel se actualiza de forma independiente — un fallo puntual en un bloque ya no tapa el resto — y la consola del navegador va a decir exactamente en qué bloque fue, lo que hace falta para encontrar la causa de raíz si reaparece.
+
+Verificado con `node --check` sobre el JS extraído del HTML — sin errores. **No verificado aún en vivo** (falta que Pedro repita el refresh y confirme, y si vuelve a fallar, que mande la consola del navegador con el mensaje `renderMetricas: ...`).
+
 ### Pendiente de esta sesión
 - [ ] **Pedro: recargar el dashboard en vivo y confirmar** que Max Drawdown ahora muestra el formato nuevo (R + % + aviso de muestra chica) en Métricas y en Prop Firm Challenge.
+- [ ] **Pedro: repetir el refresh varias veces seguidas** (el bug era intermitente) y confirmar que Rachas/Sesgo/TESLA-MALETA ya no caen a "Cargá el CSV" con datos cargados. Si vuelve a pasar, abrir la consola del navegador (Cmd+Option+C) y mandar la línea que empiece con "renderMetricas: ..." — con eso se identifica la causa de raíz.
 - [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js, tab Overview) renderizan — en las últimas capturas de Pedro aparecían en blanco. Pedirle un refresh forzado (Cmd+Shift+R) y nuevas capturas.
 
 ---

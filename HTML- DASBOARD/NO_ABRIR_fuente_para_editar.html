@@ -3066,77 +3066,109 @@ function renderSesgoActivo() {
 function renderMetricas() {
   if (!trades.length) return;
 
-  // Drawdown global
-  const pnls = trades.map(t => parseNumAR(col(t,'p&l','pnl'))||0);
-  const { maxDD, maxDDAbs, peakAtMaxDD, ddSeries } = calcDrawdown(pnls);
+  // Cada bloque aislado en su propio try/catch (mismo patron que renderAll):
+  // el 08/09 se vio Rachas y Sesgo por Activo caer a "Carga el CSV" en un
+  // refresh puntual con los mismos 4 trades que en el refresh anterior SI
+  // funcionaban -- indica que algo dentro de esta funcion tira una excepcion
+  // intermitente y corta todo lo que viene despues. Aislando cada bloque, un
+  // fallo puntual (ej. en el SVG de Drawdown) ya no tapa Rachas/Sesgo/
+  // Sistema/Prop Firm/Kelly. Si vuelve a pasar, la consola del navegador va a
+  // decir exactamente en que bloque -- eso es lo que hace falta para
+  // encontrar la causa de raiz.
 
-  // Drawdown SVG
-  const svg = document.getElementById('dd-svg');
-  if (ddSeries.length >= 2) {
-    const W=600, H=140, PAD=10;
-    const minY = Math.min(...ddSeries), maxY = 0;
-    const rangeY = Math.abs(minY) || 1;
-    const scaleX = x => PAD + (x/(ddSeries.length-1))*(W-PAD*2);
-    const scaleY = y => PAD + (1 - (y-minY)/rangeY)*(H-PAD*2);
-    const d = ddSeries.map((y,i) => `${i===0?'M':'L'}${scaleX(i).toFixed(1)},${scaleY(y).toFixed(1)}`).join(' ');
-    const zeroY = scaleY(0);
-    const areaD = d + ` L${scaleX(ddSeries.length-1).toFixed(1)},${zeroY.toFixed(1)} L${scaleX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
-    svg.innerHTML = `
-      <defs><linearGradient id="dd-grad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="var(--red)" stop-opacity="0.2"/>
-        <stop offset="100%" stop-color="var(--red)" stop-opacity="0.02"/>
-      </linearGradient></defs>
-      <line x1="${PAD}" y1="${zeroY.toFixed(1)}" x2="${W-PAD}" y2="${zeroY.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
-      <path d="${areaD}" fill="url(#dd-grad)"/>
-      <path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.5"/>`;
-  }
-  document.getElementById('dd-max-label').textContent = maxDDAbs ? 'Max DD: ' + formatDD(maxDD, maxDDAbs, peakAtMaxDD) : '—';
+  const pnls = trades.map(t => parseNumAR(col(t,'p&l','pnl'))||0);
+  let maxDD = 0, maxDDAbs = 0, peakAtMaxDD = 0, ddSeries = [];
+  try {
+    ({ maxDD, maxDDAbs, peakAtMaxDD, ddSeries } = calcDrawdown(pnls));
+  } catch (e) { console.error('renderMetricas: calcDrawdown', e); }
+
+  // Drawdown SVG + label
+  try {
+    const svg = document.getElementById('dd-svg');
+    if (svg && ddSeries.length >= 2) {
+      const W=600, H=140, PAD=10;
+      const minY = Math.min(...ddSeries), maxY = 0;
+      const rangeY = Math.abs(minY) || 1;
+      const scaleX = x => PAD + (x/(ddSeries.length-1))*(W-PAD*2);
+      const scaleY = y => PAD + (1 - (y-minY)/rangeY)*(H-PAD*2);
+      const d = ddSeries.map((y,i) => `${i===0?'M':'L'}${scaleX(i).toFixed(1)},${scaleY(y).toFixed(1)}`).join(' ');
+      const zeroY = scaleY(0);
+      const areaD = d + ` L${scaleX(ddSeries.length-1).toFixed(1)},${zeroY.toFixed(1)} L${scaleX(0).toFixed(1)},${zeroY.toFixed(1)} Z`;
+      svg.innerHTML = `
+        <defs><linearGradient id="dd-grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="var(--red)" stop-opacity="0.2"/>
+          <stop offset="100%" stop-color="var(--red)" stop-opacity="0.02"/>
+        </linearGradient></defs>
+        <line x1="${PAD}" y1="${zeroY.toFixed(1)}" x2="${W-PAD}" y2="${zeroY.toFixed(1)}" stroke="var(--border)" stroke-width="1"/>
+        <path d="${areaD}" fill="url(#dd-grad)"/>
+        <path d="${d}" fill="none" stroke="var(--red)" stroke-width="1.5"/>`;
+    }
+    const ddLabelEl = document.getElementById('dd-max-label');
+    if (ddLabelEl) ddLabelEl.textContent = maxDDAbs ? 'Max DD: ' + formatDD(maxDD, maxDDAbs, peakAtMaxDD) : '—';
+  } catch (e) { console.error('renderMetricas: drawdown SVG/label', e); }
 
   // Rachas globales
-  const { maxWin, maxLoss, rachaActual, rachaActualType } = calcRachas(trades);
-  const rachaColor = rachaActualType === 'GANADA' ? 'var(--green)' : 'var(--red)';
-  const rachaLabel = rachaActualType === 'GANADA' ? 'ganando' : rachaActualType === 'PERDIDA' ? 'perdiendo' : '—';
-  document.getElementById('metricas-rachas').innerHTML = `
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-family:'DM Mono',monospace;padding:8px 0">
-      <div style="text-align:center">
-        <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Racha Actual</div>
-        <div style="font-size:32px;color:${rachaColor}">${rachaActual}</div>
-        <div style="font-size:10px;color:${rachaColor}">${rachaLabel}</div>
-      </div>
-      <div style="text-align:center">
-        <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Mejor Racha</div>
-        <div style="font-size:32px;color:var(--green)">${maxWin}</div>
-        <div style="font-size:10px;color:var(--text-muted)">seguidas ganadas</div>
-      </div>
-      <div style="text-align:center">
-        <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Peor Racha</div>
-        <div style="font-size:32px;color:var(--red)">${maxLoss}</div>
-        <div style="font-size:10px;color:var(--text-muted)">seguidas perdidas</div>
-      </div>
-    </div>`;
+  try {
+    const { maxWin, maxLoss, rachaActual, rachaActualType } = calcRachas(trades);
+    const rachaColor = rachaActualType === 'GANADA' ? 'var(--green)' : 'var(--red)';
+    const rachaLabel = rachaActualType === 'GANADA' ? 'ganando' : rachaActualType === 'PERDIDA' ? 'perdiendo' : '—';
+    const rachasEl = document.getElementById('metricas-rachas');
+    if (rachasEl) rachasEl.innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;font-family:'DM Mono',monospace;padding:8px 0">
+        <div style="text-align:center">
+          <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Racha Actual</div>
+          <div style="font-size:32px;color:${rachaColor}">${rachaActual}</div>
+          <div style="font-size:10px;color:${rachaColor}">${rachaLabel}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Mejor Racha</div>
+          <div style="font-size:32px;color:var(--green)">${maxWin}</div>
+          <div style="font-size:10px;color:var(--text-muted)">seguidas ganadas</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:9px;color:var(--text-muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:8px">Peor Racha</div>
+          <div style="font-size:32px;color:var(--red)">${maxLoss}</div>
+          <div style="font-size:10px;color:var(--text-muted)">seguidas perdidas</div>
+        </div>
+      </div>`;
+  } catch (e) { console.error('renderMetricas: rachas', e); }
 
   // TESLA vs MALETA
-  const teslaData = calcSistema(trades.filter(t => col(t,'sistema','d').toUpperCase() === 'TESLA'));
-  const maletaData = calcSistema(trades.filter(t => col(t,'sistema','d').toUpperCase() === 'MALETA'));
-  renderMetricasSistema('metricas-tesla', teslaData, 'var(--blue)');
-  renderMetricasSistema('metricas-maleta', maletaData, 'var(--green)');
+  try {
+    const teslaData = calcSistema(trades.filter(t => col(t,'sistema','d').toUpperCase() === 'TESLA'));
+    const maletaData = calcSistema(trades.filter(t => col(t,'sistema','d').toUpperCase() === 'MALETA'));
+    renderMetricasSistema('metricas-tesla', teslaData, 'var(--blue)');
+    renderMetricasSistema('metricas-maleta', maletaData, 'var(--green)');
+  } catch (e) { console.error('renderMetricas: tesla/maleta', e); }
 
   // Sesgo por Activo
-  renderSesgoActivo();
+  try {
+    renderSesgoActivo();
+  } catch (e) { console.error('renderMetricas: sesgo por activo', e); }
 
   // Prop Firm panel — global
-  const globalData = calcSistema(trades);
-  const pfEl = document.getElementById('pf-pnl');
-  pfEl.textContent = (globalData.totalPnl>=0?'+':'')+globalData.totalPnl.toFixed(2)+'R';
-  pfEl.style.color = globalData.totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
-  document.getElementById('pf-dd').textContent = formatDD(globalData.maxDD, globalData.maxDDAbs, globalData.peakAtMaxDD, true);
-  document.getElementById('pf-wr').textContent = globalData.closed ? globalData.wr.toFixed(1)+'%' : '—';
-  const pfFactor = document.getElementById('pf-factor');
-  pfFactor.textContent = globalData.profitFactor ? globalData.profitFactor.toFixed(2) : '—';
-  pfFactor.style.color = globalData.profitFactor >= 1 ? 'var(--green)' : 'var(--red)';
+  try {
+    const globalData = calcSistema(trades);
+    const pfEl = document.getElementById('pf-pnl');
+    if (pfEl) {
+      pfEl.textContent = (globalData.totalPnl>=0?'+':'')+globalData.totalPnl.toFixed(2)+'R';
+      pfEl.style.color = globalData.totalPnl >= 0 ? 'var(--green)' : 'var(--red)';
+    }
+    const pfDdEl = document.getElementById('pf-dd');
+    if (pfDdEl) pfDdEl.textContent = formatDD(globalData.maxDD, globalData.maxDDAbs, globalData.peakAtMaxDD, true);
+    const pfWrEl = document.getElementById('pf-wr');
+    if (pfWrEl) pfWrEl.textContent = globalData.closed ? globalData.wr.toFixed(1)+'%' : '—';
+    const pfFactor = document.getElementById('pf-factor');
+    if (pfFactor) {
+      pfFactor.textContent = globalData.profitFactor ? globalData.profitFactor.toFixed(2) : '—';
+      pfFactor.style.color = globalData.profitFactor >= 1 ? 'var(--green)' : 'var(--red)';
+    }
+  } catch (e) { console.error('renderMetricas: prop firm', e); }
 
   // Kelly por sistema
-  renderKelly();
+  try {
+    renderKelly();
+  } catch (e) { console.error('renderMetricas: kelly', e); }
 }
 
 function renderKelly() {
