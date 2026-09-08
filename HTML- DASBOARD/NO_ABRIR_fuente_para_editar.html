@@ -3551,10 +3551,30 @@ const ALL_MERCADO_SYMBOLS = [...FOREX_SYMBOLS, ...COMMODITY_SYMBOLS];
 // ══════════════════════════════════════
 const TWELVE_DATA_BUDGET = 7;                // margen de seguridad bajo 8 créditos/min
 const TWELVE_DATA_WINDOW_MS = 65_000;        // 65s, margen sobre 60s reales
+
+// La ventana de rate-limit se persiste en localStorage (fix 2026-09-08, Claude):
+// antes vivía solo en variables JS, así que un F5 a mitad de una tanda la reiniciaba
+// a 0 créditos usados -- pero Twelve Data sigue contando en SU servidor sin que le
+// importe que el navegador haya recargado. Resultado: refrescar en el momento
+// equivocado disparaba pedidos "frescos" que se sumaban a los ya consumidos en la
+// ventana real y volvían con HTTP 429. Ahora, al recargar, se recupera cuánto se
+// había gastado (si la ventana real sigue vigente) en vez de asumir presupuesto lleno.
+function cargarVentanaTwelveData() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('pei_td_window') || 'null');
+    if (raw && (Date.now() - raw.start) < TWELVE_DATA_WINDOW_MS) return { start: raw.start, used: raw.used };
+  } catch(e) {}
+  return { start: 0, used: 0 };
+}
+function guardarVentanaTwelveData() {
+  try { localStorage.setItem('pei_td_window', JSON.stringify({ start: twelveDataWindowStart, used: twelveDataCreditsUsed })); } catch(e) {}
+}
+const _ventanaInicial = cargarVentanaTwelveData();
+
 let twelveDataQueue = [];
 let twelveDataProcessing = false;
-let twelveDataWindowStart = 0;
-let twelveDataCreditsUsed = 0;
+let twelveDataWindowStart = _ventanaInicial.start;
+let twelveDataCreditsUsed = _ventanaInicial.used;
 
 function enqueueTwelveData(symbols, endpoint, extraParams = {}) {
   return new Promise((resolve, reject) => {
@@ -3579,8 +3599,10 @@ async function processTwelveDataQueue() {
       twelveDataWindowStart = Date.now();
       twelveDataCreditsUsed = 0;
     }
+    guardarVentanaTwelveData();
     await ejecutarJobTwelveData(job);
     twelveDataCreditsUsed += creditsNeeded;
+    guardarVentanaTwelveData();
     twelveDataQueue.shift();
   }
   twelveDataProcessing = false;

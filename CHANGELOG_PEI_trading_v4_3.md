@@ -124,6 +124,24 @@ Fix (`7b77dff`): `restoreMercadoCache()` pinta los últimos precios conocidos (g
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 7ma) — Fix real de los HTTP 429 en Mercado — CERRADA, commit local sin pushear
+
+Pedro probó el fix de cache de la sesión anterior en la URL en vivo (`https://pedritozar.github.io/trading-desk/`) y siguió viendo demora; al refrescar (con el botón de recargar del navegador, no F5 porque su F5 tiene atado el dictado por teclado) vio **HTTP 429 real** en Currency Strength y Commodities ("No se pudo cargar — reintentando en unos segundos…"), y recuperó varios minutos después.
+
+**Causa raíz encontrada:** la ventana de rate-limit (`twelveDataWindowStart`/`twelveDataCreditsUsed`) vivía solo en variables JS, reseteada a 0 en cada carga de página. Twelve Data cuenta los créditos en SU servidor, sin importarle que el navegador haya recargado — así que refrescar a mitad de una tanda hacía que el dashboard "creyera" tener el presupuesto completo (7 créditos) disponible de nuevo y disparara pedidos frescos que se sumaban a los ya consumidos en la ventana real, superando el límite real de Twelve Data (8 créditos/60s) y devolviendo 429.
+
+**Fix (commit local, sin pushear todavía):** la ventana ahora se persiste en `localStorage` (`pei_td_window`, `{start, used}`). Al cargar la página, si la ventana guardada sigue vigente (menos de 65s desde que arrancó), se retoma con los créditos ya gastados en vez de asumir presupuesto lleno — así un refresh a mitad de carga espera lo que falta de la ventana real en lugar de gatillar un pedido de más que rebota en 429. No cambia el presupuesto (7/65s) ni la lógica de troceo — solo hace que sobreviva a un F5.
+
+**Nota aparte, no resuelto en esta sesión — riesgo de fondo:** el dashboard usa una API key de Twelve Data hardcodeada y compartida (`TWELVE_DATA_KEY_DEFAULT`, visible en texto plano en el repo público de GitHub) como default cuando el campo de Config está vacío. Esa key comparte el mismo balde de 8 créditos/60s con **cualquiera** que la use — otro visitante del repo, un bot que lo scrapee, o el propio Pedro probando desde dos pestañas/dispositivos a la vez. Esto agrava (no reemplaza) la causa del 429 de arriba. Recomendación: que Pedro saque su propia API key gratis en twelvedata.com y la cargue en el campo "API key de Twelve Data" de ⚙ Config del dashboard — dos minutos, y deja de compartir balde con terceros. No implementado porque requiere que Pedro genere su propia key.
+
+**Dos bugs viejos, separados, todavía sin diagnosticar — necesitan que Pedro pruebe una URL en su navegador porque no hay red de mi lado para probarlas yo:**
+1. **Commodities siempre en 0,00 (WTI/BRENT/COPPER/NATGAS)** — solo Oro (XAU/USD) trae precio real. Hipótesis: esos símbolos de futuros/commodities puede que no estén incluidos en el plan Basic (gratis) de Twelve Data, o necesiten otro formato de símbolo. Pedro: abrí en el navegador `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` y pasame qué devuelve (¿precios reales, o un error tipo "symbol not found"/plan pago?).
+2. **RVOL siempre en 0.0x (SPY/QQQ/XAU) o "sin datos" (WTI)** — hipótesis: el plan gratis de Twelve Data no incluye volumen real en `time_series` para estos símbolos (volumen en 0 en todas las barras), y el cálculo de RVOL depende 100% de eso. Pedro: abrí `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` y fijate si el campo `"volume"` de cada barra viene con números reales o en `"0"`.
+
+*Cerrado (parcial): 2026-09-08, sesión Cowork (Claude Sonnet 5). El fix de 429 quedó cerrado; los dos bugs de arriba quedan abiertos en Pendientes hasta que Pedro reporte los resultados de las URLs.*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -179,6 +197,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
+- [ ] **Commodities en 0,00 (WTI/BRENT/COPPER/NATGAS) y RVOL en 0.0x/sin datos** — hipótesis: límite del plan gratis de Twelve Data (símbolos de futuros y/o volumen real no incluidos en Basic). Esperando que Pedro pruebe 2 URLs y reporte (ver sesión 7ma arriba).
+- [ ] **Sacar la API key hardcodeada de Twelve Data del repo público** — hoy cualquiera que use el default comparte el mismo límite de 8 créditos/min con Pedro, lo que puede estar causando/agravando los 429. Pedro puede sacar su propia key gratis y cargarla en Config; ahí se evalúa si conviene sacar el default del código o dejarlo como fallback de todos modos.
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
 - [ ] Probar Currency Strength con mercados europeos abiertos (4AM ARG).
