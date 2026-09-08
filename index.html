@@ -3651,6 +3651,13 @@ async function fetchMercado() {
     updateCommodities(data);
     const el = document.getElementById('mercado-last-update');
     if (el) el.textContent = new Date().toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    // Cache en localStorage (fix 09/09 -- "cada refresh vuelve a Cargando..."): Twelve Data
+    // Basic tiene 8 creditos/min y este tab pide 15 simbolos -> se trocea en tandas de 5 que
+    // se van espaciando (ver cola global mas abajo), asi que un fetch en frio puede tardar
+    // hasta ~2min en completar TODAS las tandas. Sin cache, cada F5 arranca de cero y el panel
+    // queda en "Cargando..." todo ese tiempo. Con cache, restoreMercadoCache() pinta los
+    // ultimos numeros conocidos al instante mientras el fetch fresco corre atras.
+    try { localStorage.setItem('pei_mercado_cache', JSON.stringify({ data, ts: Date.now() })); } catch(e) {}
   } catch (err) {
     console.error('fetchMercado error:', err);
     mostrarErrorMercado(err.message);
@@ -4078,8 +4085,25 @@ function initEarningsTab() {
   initEarningsHistorico();
 }
 
+// Pinta los últimos precios conocidos (localStorage) de entrada, antes de que termine
+// el fetch fresco -- ver nota en fetchMercado(). Nunca bloquea ni reemplaza al fetch real,
+// solo evita el panel en blanco durante los primeros ~2min de un refresh en frío.
+function restoreMercadoCache() {
+  let cached;
+  try { cached = JSON.parse(localStorage.getItem('pei_mercado_cache') || 'null'); } catch(e) { return; }
+  if (!cached || !cached.data) return;
+  updateCurrencyStrength(cached.data);
+  updateCommodities(cached.data);
+  const el = document.getElementById('mercado-last-update');
+  if (el) {
+    const horaCache = new Date(cached.ts).toLocaleTimeString('es-AR', {hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    el.innerHTML = `${horaCache} <span style="color:var(--text-muted)">(caché, actualizando…)</span>`;
+  }
+}
+
 function initMercadoTab() {
   if (mercadoInterval) return;
+  restoreMercadoCache();
   fetchMercado();
   setTimeout(fetchRVOL, 3000); // escalonado 3s para no saturar el límite por minuto de Twelve Data
   mercadoInterval = setInterval(() => {
