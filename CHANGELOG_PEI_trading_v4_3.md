@@ -114,6 +114,16 @@ Agregada sección "🖥️ Trading Desk — Dashboard en vivo" en la página Not
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 6ta) — Cache de Mercado (Currency Strength/Commodities) — CERRADA, commit local sin pushear
+
+Pedro reportó (con capturas) que el tab Mercado tarda en mostrar números, más al refrescar. Causa raíz: Twelve Data Basic tiene 8 créditos/min y el tab pide 15 símbolos (10 forex + 5 commodities) -- la cola global de rate-limit los trocea en tandas de 5 y las va espaciando, así que un fetch en frío puede tardar hasta ~2min en completar todas las tandas. Sin cache, cada F5 volvía a "Cargando..." desde cero por ese rato.
+
+Fix (`7b77dff`): `restoreMercadoCache()` pinta los últimos precios conocidos (guardados en localStorage en cada fetch exitoso) apenas se abre el tab, mientras el fetch fresco corre atrás y los reemplaza solo cuando termina. Muestra "(caché, actualizando…)" en la hora de última actualización mientras tanto. No cambia la lógica de fetch ni el rate-limit en sí -- sigue tardando lo mismo en traer datos nuevos, pero ya no se ve la pantalla en blanco en cada refresh.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
