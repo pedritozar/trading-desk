@@ -1594,7 +1594,7 @@ const ALL_SYMS = [
   { sym: 'NZD/USD', source: 'fxrate', fxSym: 'NZD' },
   { sym: 'AUD/CHF', source: 'cross',       fxA: 'AUD', fxB: 'CHF' },
   { sym: 'XAU/USD', source: 'static',      staticPrice: 4518.00, staticChg: -0.38 }, // 29/05/2026
-  { sym: 'S&P 500', source: 'finnhub',     fhSym: 'SPY' },
+  { sym: 'S&P 500 (SPY)', source: 'finnhub',     fhSym: 'SPY' },
   { sym: 'NASDAQ',  source: 'finnhub',     fhSym: 'QQQ' },
   { sym: 'DXY',     source: 'static',      staticPrice: 98.20,   staticChg: -0.22 }, // 29/05/2026
   { sym: 'BRENT',   source: 'static',      staticPrice: 87.50,   staticChg: -1.57 }, // 29/05/2026
@@ -1654,18 +1654,40 @@ async function fetchFinnhubPrice(symbol) {
 // MOEX: índices rusos
 async function fetchMOEX() {
   for (const m of MOEX_SYMS) {
+    let got = false;
     try {
       const url = `https://iss.moex.com/iss/engines/stock/markets/index/boards/${m.board}/securities/${m.ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,CURRENTVALUE,LASTTOPREVPRICE`;
       const res = await fetch(url);
       const d = await res.json();
       const row = d?.marketdata?.data?.[0];
-      if (row && row[1]) {
+      if (row && row[1] != null) {
         const price = parseFloat(row[1]);
         const chg = parseFloat(row[2]) || 0;
         priceData[m.sym] = { price, chg };
         updatePriceCard(m.sym, price, chg);
+        got = true;
       }
     } catch(e) {}
+    // Fallback (fix 09/09): RTSI no devuelve datos bajo el board fijo 'SNDX' (a diferencia
+    // de IMOEX) -- causa distinta a la de HSTECH/MOEX/CSI300 (esas son CORS de Yahoo, esto es
+    // un board equivocado en la API de MOEX). Reintenta sin filtro de board -- ese endpoint
+    // devuelve marketdata para TODOS los boards donde cotiza el símbolo -- y toma la primera
+    // fila con valor real. No toca el camino feliz de IMOEX (sigue entrando por el try de arriba).
+    if (!got) {
+      try {
+        const url2 = `https://iss.moex.com/iss/engines/stock/markets/index/securities/${m.ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=BOARDID,SECID,CURRENTVALUE,LASTTOPREVPRICE`;
+        const res2 = await fetch(url2);
+        const d2 = await res2.json();
+        const rows = d2?.marketdata?.data || [];
+        const row2 = rows.find(r => r[2] != null);
+        if (row2) {
+          const price = parseFloat(row2[2]);
+          const chg = parseFloat(row2[3]) || 0;
+          priceData[m.sym] = { price, chg };
+          updatePriceCard(m.sym, price, chg);
+        }
+      } catch(e) {}
+    }
   }
 }
 
