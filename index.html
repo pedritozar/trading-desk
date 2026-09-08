@@ -829,6 +829,7 @@ body {
   <button class="nav-btn" onclick="showTab('mercado', this); if(!mercadoInterval) initMercadoTab();">Mercado</button>
   <button class="nav-btn" onclick="showTab('indices', this); if(!indicesLoaded) initIndicesTab();">Índices</button>
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
+  <button class="nav-btn" onclick="showTab('historico', this); if(!historicoLoaded) initHistoricoTab();">Histórico</button>
   <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
 </div>
 
@@ -1280,6 +1281,24 @@ body {
       <div id="earnings-panel" style="padding:8px 0">
         <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ HISTÓRICO TAB ══ -->
+  <div id="tab-historico" class="tab-content">
+    <div class="section-title">Histórico — Archivo permanente por mes (Firestore)</div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Comparativa año a año</span>
+        <button onclick="archivarMesesCerrados(true).then(() => { historicoLoaded = false; initHistoricoTab(); })" style="font-size:9px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer">↻ Sincronizar ahora</button>
+      </div>
+      <div id="historico-container" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span>Evolución multi-año (R acumulado)</span></div>
+      <div style="padding:12px 0"><canvas id="historico-chart" height="80"></canvas></div>
     </div>
   </div>
 
@@ -1861,7 +1880,8 @@ function renderAll() {
   const pasos = [
     renderKPIs, renderEquity, renderTrades, renderActivoBars, renderSistema,
     renderCalendar, renderDistribucion, renderMetricas, renderMetaCuenta,
-    renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS
+    renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS,
+    archivarMesesCerrados
   ];
   for (const fn of pasos) {
     try { fn(); } catch (e) { console.error(`renderAll: fallo ${fn.name}`, e); }
@@ -1924,6 +1944,7 @@ function set(id, val) {
 // previo, y renderAll() se llama seguido por cambios de filtro/CSV).
 let chartEquity = null;
 let chartActivoBars = null;
+let chartHistorico = null;
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -2987,6 +3008,155 @@ async function actualizarResumenPEISYS() {
   }
 }
 
+// ══════════════════════════════════════
+// ARCHIVO PERMANENTE POR MES (Firestore, colección 'trades_history')
+// Objetivo: que sobreviva a que el CSV se reemplace, para comparativas año a
+// año a largo plazo. Un doc por mes cerrado ('YYYY-MM'), con resumen agregado
+// + cada trade crudo. El mes en curso nunca se archiva (todavía puede
+// cambiar). Requiere que las Firestore Rules de peisys permitan read+write en
+// 'trades_history' (mismo ajuste manual que ya se hizo para 'earnings_hist').
+// ══════════════════════════════════════
+
+// Firestore no acepta "/" en claves de campo ni valores undefined -- limpia
+// cada trade crudo antes de escribirlo (hay headers reales como "r/r teórico").
+function sanitizarTradeParaFirestore(trade) {
+  const out = {};
+  for (const [k, v] of Object.entries(trade)) {
+    if (v === undefined) continue;
+    const key = k.replace(/\//g, '_').trim();
+    if (key) out[key] = v;
+  }
+  return out;
+}
+
+async function archivarMesesCerrados(forzar) {
+  if (!trades.length) return;
+  if (typeof window.peisysSetDoc !== 'function') return;
+  try {
+    const hoy = new Date();
+    const mesActualKey = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+
+    const porMes = {};
+    trades.forEach(t => {
+      const f = new Date(col(t, 'fecha'));
+      if (isNaN(f.getTime())) return;
+      const key = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0');
+      (porMes[key] = porMes[key] || []).push(t);
+    });
+
+    const archivados = JSON.parse(localStorage.getItem('pei_meses_archivados') || '{}');
+    let huboNuevo = false;
+
+    for (const key of Object.keys(porMes)) {
+      if (key >= mesActualKey) continue; // el mes en curso no se archiva
+      if (archivados[key] && !forzar) continue;
+
+      const tradesDelMes = porMes[key];
+      const [anio, mes] = key.split('-').map(Number);
+      const resumen = calcSistema(tradesDelMes);
+      const porSistema = {
+        TESLA:  calcSistema(tradesDelMes.filter(t => col(t, 'sistema', 'd').toUpperCase() === 'TESLA')),
+        MALETA: calcSistema(tradesDelMes.filter(t => col(t, 'sistema', 'd').toUpperCase() === 'MALETA'))
+      };
+
+      await window.peisysSetDoc('trades_history', key, {
+        anio, mes, mesLabel: MESES_ABREV[mes - 1],
+        resumen, porSistema,
+        tradesRaw: tradesDelMes.map(sanitizarTradeParaFirestore),
+        archivadoEn: new Date().toISOString(),
+        version: 1
+      });
+
+      archivados[key] = true;
+      huboNuevo = true;
+    }
+
+    if (huboNuevo) localStorage.setItem('pei_meses_archivados', JSON.stringify(archivados));
+  } catch (e) {
+    console.warn('archivarMesesCerrados: no se pudo archivar', e);
+  }
+}
+
+async function initHistoricoTab() {
+  if (historicoLoaded) return;
+  historicoLoaded = true;
+  const cont = document.getElementById('historico-container');
+  if (cont) cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando histórico desde Firestore…</div>`;
+  try {
+    if (typeof window.peisysGetCollection !== 'function') throw new Error('Puente Firestore no disponible (peisysGetCollection)');
+    historicoData = await window.peisysGetCollection('trades_history');
+    renderHistorico();
+  } catch (e) {
+    console.error('initHistoricoTab', e);
+    historicoLoaded = false;
+    if (cont) cont.innerHTML = `<div style="color:var(--red);font-size:11px;font-family:'DM Mono',monospace">No se pudo cargar el histórico: ${e.message}</div>`;
+  }
+}
+
+function renderHistorico() {
+  const cont = document.getElementById('historico-container');
+  if (!cont || !historicoData) return;
+  const meses = Object.values(historicoData).sort((a, b) => (a.anio * 12 + a.mes) - (b.anio * 12 + b.mes));
+
+  if (!meses.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Todavía no hay meses archivados. Se archivan solos cuando cierra un mes calendario con trades cargados (o usá "Sincronizar ahora").</div>`;
+    return;
+  }
+
+  const porAnio = {};
+  meses.forEach(m => (porAnio[m.anio] = porAnio[m.anio] || []).push(m));
+  const anios = Object.keys(porAnio).map(Number).sort((a, b) => b - a);
+
+  const filas = anios.map(anio => {
+    const ms = porAnio[anio];
+    const totalR = ms.reduce((a, m) => a + (m.resumen.totalPnl || 0), 0);
+    const totalTrades = ms.reduce((a, m) => a + (m.resumen.trades || 0), 0);
+    const totalGan = ms.reduce((a, m) => a + (m.resumen.ganadas || 0), 0);
+    const totalPer = ms.reduce((a, m) => a + (m.resumen.perdidas || 0), 0);
+    const wr = (totalGan + totalPer) ? (totalGan / (totalGan + totalPer) * 100) : 0;
+    const color = totalR > 0 ? 'var(--green)' : totalR < 0 ? 'var(--red)' : 'var(--text-secondary)';
+    return `<tr style="border-bottom:1px solid var(--divider)">
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace">${anio}</td>
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace">${totalTrades}</td>
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace">${wr.toFixed(1)}%</td>
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace;color:${color}">${(totalR >= 0 ? '+' : '') + totalR.toFixed(2)}R</td>
+      <td style="padding:8px 12px;font-family:'DM Mono',monospace;color:var(--text-muted)">${ms.length} mes(es)</td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML = `
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="border-bottom:1px solid var(--divider);text-align:left">
+        <th style="padding:8px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Año</th>
+        <th style="padding:8px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Trades</th>
+        <th style="padding:8px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Win Rate</th>
+        <th style="padding:8px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase">P&amp;L Total (R)</th>
+        <th style="padding:8px 12px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Cobertura</th>
+      </tr></thead>
+      <tbody>${filas}</tbody>
+    </table>
+    <div style="font-size:9px;color:var(--text-muted);margin-top:10px">
+      El mes en curso no aparece acá hasta que cierre (se archiva solo al empezar el mes siguiente). ${meses.length} mes(es) archivado(s) en total.
+    </div>
+  `;
+
+  renderHistoricoChart(meses);
+}
+
+function renderHistoricoChart(meses) {
+  const canvas = document.getElementById('historico-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (chartHistorico) chartHistorico.destroy();
+  const labels = meses.map(m => MESES_ABREV[m.mes - 1] + ' ' + String(m.anio).slice(2));
+  let acumulado = 0;
+  const dataAcum = meses.map(m => acumulado += (m.resumen.totalPnl || 0));
+  chartHistorico = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels, datasets: [{ label: 'R acumulado', data: dataAcum, borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,0.1)', fill: true, tension: 0.2 }] },
+    options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' } } } }
+  });
+}
+
 function renderMetricasSistema(id, data, color) {
   const el = document.getElementById(id);
   if (!data.trades) { el.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin datos</div>`; return; }
@@ -3782,6 +3952,8 @@ const STATIC_PRICES = {
 };
 
 let indicesLoaded = false;
+let historicoLoaded = false;
+let historicoData = null;
 
 function calcStats(data) {
   if (!data || !data.length) return { avg:0, vol:0, best:{mes:'—',ret:0}, worst:{mes:'—',ret:0}, cumRet:0 };
@@ -4067,12 +4239,14 @@ initAutoSync();
 </script>
 <script type="module">
   // ══════════════════════════════════════
-  // PUENTE TRADING → PEI·SYS — cliente Firebase de solo-escritura
-  // Mismo proyecto Firebase que PEI·SYS (peisys). Escribe únicamente en
-  // la colección 'resumen_trading', doc 'actual'. No lee nada de Firestore.
+  // PUENTE TRADING → PEI·SYS — cliente Firebase
+  // Mismo proyecto Firebase que PEI·SYS (peisys). Escribe en 'resumen_trading'
+  // (snapshot live) y 'trades_history' (archivo permanente por mes). Desde el
+  // feature de Histórico también LEE 'trades_history' vía peisysGetCollection
+  // -- si esa pestaña no carga, revisar las Firestore Rules (ver CHANGELOG).
   // ══════════════════════════════════════
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { getFirestore, doc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAGfXyBG1OuoOyNgtdmLNvXHq1WD2MsnRo",
@@ -4088,6 +4262,15 @@ initAutoSync();
   const db = getFirestore(app);
 
   window.peisysSetDoc = (col, id, data) => setDoc(doc(db, col, id), data, { merge: true });
+  // Lectura agregada por colección -- la usa la pestaña Histórico para traer
+  // todos los meses archivados de una. Requiere permiso de "read" en las
+  // Firestore Rules para 'trades_history' (antes este puente era solo-escritura).
+  window.peisysGetCollection = async (col) => {
+    const snap = await getDocs(collection(db, col));
+    const out = {};
+    snap.forEach(d => { out[d.id] = d.data(); });
+    return out;
+  };
 
   // Al terminar de cargar el módulo, sincronizar el resumen ya calculado
   // (por si los trades se restauraron desde localStorage antes de que este script corriera).

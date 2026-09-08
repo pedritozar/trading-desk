@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-08 (sesión Cowork — root cause encontrada y arreglada: TDZ en `DD_MUESTRA_CHICA_R` explicaba el "Sin datos" de Tesla/Maleta y el Drawdown en blanco; + fix Max Drawdown + aislamiento por bloque de renderMetricas() + git tracking)
+**Última actualización:** 2026-09-08 (sesión Cowork — feature nueva: archivo permanente por mes en Firestore + pestaña Histórico; + root cause TDZ de `DD_MUESTRA_CHICA_R` arreglada; + fix Max Drawdown + aislamiento renderMetricas() + git tracking)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -71,8 +71,60 @@ Se movieron ambas declaraciones (`const DD_MUESTRA_CHICA_R` y `let analisisView`
 - **Pendiente: confirmación visual de Pedro** en el dashboard real (recarga forzada Cmd+Shift+R) — la reproducción es sólida pero la palabra final la tiene el navegador real.
 
 ### Pendiente de esta sesión
-- [ ] **Pedro: confirmar en el dashboard real** que TESLA/MALETA y el label de Drawdown ya muestran datos tras un refresh forzado.
+- [x] **Pedro confirmó en el dashboard real**: TESLA muestra datos (3 trades, -0.16R) y el label de Drawdown ya no está en blanco (`-2.00R (-108.7%, muestra chica)`). MALETA sigue en "Sin datos" pero es correcto — no hay trades de MALETA en el CSV cargado (3 TESLA + 1 sin sistema).
 - [ ] Sigue sin confirmarse si Equity Curve y P&L por Activo (Chart.js) renderizan con internet real — pedir capturas nuevas.
+
+---
+
+## Sesión 2026-09-08 (cont. 3) — Feature nueva: archivo permanente por mes en Firestore + pestaña Histórico
+
+### Qué se pidió
+Pedro planteó que el dashboard actual calcula todo en vivo desde el CSV cargado en `localStorage` — si algún día reemplaza el CSV (o cambia de máquina), se pierde el historial. Pidió poder archivar los trades mes a mes de forma permanente, para poder hacer comparativas año a año a largo plazo ("que me acompañe mis 40 años de inversor y trader"). Se definieron 3 decisiones de diseño con él antes de programar:
+1. **Trigger:** automático al cerrar el mes calendario (no requiere que se acuerde de nada).
+2. **Granularidad:** ambos — resumen agregado (para comparativas rápidas) + cada trade crudo (para poder auditar/reconstruir cualquier mes a futuro).
+3. **Visualización:** nueva pestaña "Histórico" en el dashboard, con comparativa año a año y gráfico de evolución multi-año.
+
+### Diseño de datos (Firestore, proyecto `peisys`, colección nueva `trades_history`)
+Un doc por mes cerrado, id `"YYYY-MM"` (ej. `"2026-08"` — ordena cronológicamente como string, sin necesidad de índice compuesto):
+```
+trades_history/2026-08 {
+  anio: 2026, mes: 8, mesLabel: "Ago",
+  resumen: { trades, ganadas, perdidas, wr, totalPnl, avgWin, avgLoss, profitFactor, maxDD, maxDDAbs, peakAtMaxDD, maxWin, maxLoss, rachaActual, rachaActualType },
+  porSistema: { TESLA: {...mismo shape...}, MALETA: {...} },
+  tradesRaw: [ {...cada trade tal cual el CSV, con claves saneadas...} ],
+  archivadoEn: "2026-09-08T...",
+  version: 1
+}
+```
+El mes en curso **nunca se archiva** (todavía puede cambiar) — solo se archivan meses ya cerrados (`key < mesActualKey`, comparación de string "YYYY-MM" que ordena bien sin parsear).
+
+### Implementación
+- **`archivarMesesCerrados(forzar)`** (nueva, agregada a `renderAll()`): agrupa `trades` por mes usando `fecha` (mismo parseo que ya usa `agruparPorMes()` para Resumen Mensual), y por cada mes cerrado no archivado todavía escribe el doc completo vía `peisysSetDoc('trades_history', key, {...})`. Guarda qué meses ya se archivaron en `localStorage` (`pei_meses_archivados`) para no reescribir en cada reload — pasando `forzar=true` (botón manual) lo hace igual, para backfill o si corregiste un trade viejo.
+- **Saneamiento de datos** (`sanitizarTradeParaFirestore`): Firestore no acepta `/` en claves de campo ni valores `undefined`. Los headers reales del CSV incluyen `"r/r teórico"` y `"r/r real"` — se sanean a `"r_r teórico"` / `"r_r real"` antes de escribir. Verificado con el CSV real de Pedro: cero claves con `/` en el resultado.
+- **Puente Firestore extendido a lectura**: hasta ahora era solo-escritura (`peisysSetDoc`). Se agregó `peisysGetCollection(col)` (usa `getDocs`/`collection` del SDK v9) para poder leer toda la colección `trades_history` desde la pestaña Histórico.
+- **Pestaña "Histórico" nueva**: comparativa año a año (Trades, Win Rate, P&L Total en R, meses archivados) calculada sobre lo que devuelve Firestore + gráfico Chart.js de R acumulado mes a mes a través de todos los años archivados. Botón "↻ Sincronizar ahora" para forzar el archivado (útil para backfill de meses viejos o después de corregir un trade).
+
+### ⚠️ Acción manual pendiente de Pedro — Firestore Rules
+Este puente pasó de ser solo-escritura a también leer (`trades_history`). **Si la pestaña Histórico no carga (error "No se pudo cargar el histórico"), es casi seguro que las Firestore Rules del proyecto `peisys` no permiten `read` en esa colección.** Hay que agregar algo como esto en Firebase Console → Firestore Database → Rules (ajustar al patrón que ya usás para `resumen_trading`/`earnings_hist` — sea abierto o con auth):
+```
+match /trades_history/{doc} {
+  allow read, write: if true; // o la misma condición que ya tenés en earnings_hist
+}
+```
+
+### Verificación (Playwright, sin acceso a Firestore real — se mockeó `peisysSetDoc`)
+Con el CSV real de Pedro (4 trades de agosto 2026, hoy=8/sep/2026 en el sandbox):
+- ✅ Se archiva exactamente 1 mes (`2026-08`), con `resumen.trades=4`, `totalPnl=-0.16`, `porSistema.TESLA.trades=3`, `tradesRaw.length=4`, cero claves con `/`.
+- ✅ Un segundo reload con el mes ya marcado como archivado en `localStorage` → 0 escrituras nuevas (el guard funciona, no gasta cuota de Firestore de más).
+- ✅ Forzar sync manual (`archivarMesesCerrados(true)`) sobre un mes ya archivado → sí vuelve a escribir (para backfill/correcciones).
+- ✅ Con un trade agregado en septiembre (mes en curso) → **no se archiva** — solo se archivó agosto. El mes abierto queda protegido como estaba diseñado.
+- `node --check` sin errores (script principal + script `type="module"` del puente Firebase).
+- **No verificado con Firestore real** — falta que Pedro confirme en el dashboard real que la pestaña Histórico carga (después de ajustar las Rules si hace falta).
+
+### Pendiente de esta sesión
+- [ ] **Pedro: revisar/ajustar las Firestore Rules** para permitir `read` en `trades_history` (ver snippet arriba).
+- [ ] **Pedro: abrir la pestaña Histórico** y confirmar que carga (aunque esté vacía la primera vez — recién va a tener datos después de que cierre un mes, o usando "Sincronizar ahora" para forzar el archivado de agosto ya mismo).
+- [ ] Evaluar a futuro: agregar al Histórico el desglose por activo (Sesgo) y por sistema (Tesla/Maleta) por año, no solo el agregado global — quedó afuera del MVP para no demorar esta entrega.
 
 ---
 
