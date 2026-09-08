@@ -49,6 +49,7 @@ secrets.*
 *.xlsx
 *.xlsm
 tracker_bitacora*.csv
+trades_*.csv
 
 # ── Backups y copias ──
 *backup*
@@ -60,3 +61,4 @@ tracker_bitacora*.csv
 # ── Carpeta de estudio CMT (PDFs pesados, material con copyright) ──
 traiding:cmt/
 trading-cmt/
+*.bak_*
