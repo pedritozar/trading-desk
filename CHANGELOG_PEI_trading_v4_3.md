@@ -69,6 +69,22 @@ Sesión larga en 4 partes, las 4 cerradas y confirmadas por Pedro en el dashboar
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 2da) — RTSI, SPY/SPX, deploy.sh — CERRADA, commit local sin pushear
+
+Commit `5ef022a` preparado en Cowork, falta que Pedro lo pushee desde su Terminal (Cowork no tiene credenciales de GitHub, ver Workflows).
+
+1. **Fix RTSI sin datos** (`fetchMOEX()`): causa no era CORS (a diferencia de HSTECH/MOEX/CSI300) sino que RTSI no devuelve `marketdata` bajo el board fijo `SNDX` que sí funciona para IMOEX. Se agregó fallback: si el board fijo no trae datos, reintenta contra el endpoint sin filtro de board (devuelve `marketdata` de todos los boards donde cotiza) y toma la primera fila con valor real. No toca el camino de IMOEX. **Sin verificar en vivo** — MOEX bloquea el fetch tanto desde este sandbox como desde la Mac de Pedro (sin red en ninguna de las dos), así que el fix está razonado a partir de cómo responde la API MOEX ISS documentada, no confirmado con una respuesta real. Confirmar en el dashboard real y avisar si sigue en blanco.
+2. **Desambiguado SPY vs SPX:** tab Precios ahora dice "S&P 500 (SPY)" — el tab Índices sigue con el SPX real sin cambios. Resuelve la inconsistencia anotada en Pendientes.
+3. **`deploy.sh` arreglado:** usa `git rev-parse --show-toplevel` en vez de asumir `~/Desktop/trading-desk` — ya funciona desde sesiones Cowork.
+
+### ⚠️ Pendiente — acción manual de Pedro
+- [ ] Pushear el commit `5ef022a` desde la Terminal real (`cd ~/Desktop/trading-desk && git push origin main`).
+- [ ] Confirmar en el dashboard real (después del push) que RTSI ahora muestra precio en la tab Mercado. Si sigue en blanco, es un board distinto al que probé y hay que abrir consola para ver el error real.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -108,8 +124,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ Panel Demo vs Live · Sección Análisis (torta, por activo, castigados)
 - ✅ CSV: parser `;` ARG + localStorage + 3 formas de cargar — **CSV Manual** (selector de archivo nativo, hay que repetirlo si el archivo cambia), **Fijar CSV** (File System Access API, solo Chrome/Brave/Edge — habilita Auto-sync cada 30s), **Pegar CSV** (modal con textarea, la más rápida para cargas puntuales)
 - ✅ Puente PEI·SYS: escribe `resumen_trading/actual` en cada `renderAll()` (dashboard separado, solo escritura)
-- ⚠️ **Pendiente sin diagnosticar:** CORS de Yahoo Finance en Índices (HSTECH/MOEX/CSI300 en blanco) — arreglable deployando `cloudflare_worker_proxy.js` (instrucciones en el propio archivo, acción de Pedro en Cloudflare). RTSI (dentro de MOEX) tampoco carga, causa distinta, sin diagnosticar.
-- ⚠️ Inconsistencia menor: tab Precios muestra el ETF (SPY, ~765) y tab Índices el índice real (SPX, ~7.619) — no es bug, pero confunde. Unificar criterio.
+- ⚠️ **Pendiente, acción de Pedro:** CORS de Yahoo Finance en Índices (HSTECH/MOEX/CSI300 en blanco) — `cloudflare_worker_proxy.js` ya está listo, solo falta que Pedro lo deploye en su cuenta de Cloudflare (5 min, instrucciones en el propio archivo) y pegue la URL en Config.
+- ✅ RTSI (dentro de Mercado): fix aplicado 09/09 (ver sesión de arriba) — causa era un board equivocado en la API de MOEX, no CORS. Sin verificar en vivo todavía.
 
 ### Archivos HTML
 - **`index.html`** (raíz) → **el que Pedro abre siempre**, haciendo doble click en la carpeta. Es el archivo real y actualizado — se actualiza solo cuando se corre `deploy.sh` (o el equivalente manual, ver Workflows). Nunca hace falta usar la URL en vivo para verlo: abrir este archivo local ES ver la versión de siempre.
@@ -129,7 +145,6 @@ Objetivo: que los earnings de la watchlist queden agrupados por año → trimest
 
 ### 🟡 Media prioridad
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
-- [ ] **Unificar S&P 500:** decidir si Precios muestra el ETF o el índice, y etiquetarlo bien.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
 - [ ] Fila 32 de la hoja DASHBOARD del Excel apunta a "RUSSELL 2000" (activo que ya no está en la bitácora) — cambiar por uno real o hacerla dinámica.
 - [ ] Embed del dashboard en Notion (`/embed` + URL de GitHub Pages).
@@ -141,7 +156,6 @@ Objetivo: que los earnings de la watchlist queden agrupados por año → trimest
 - [ ] Calculadora de lotaje en el dashboard (hoy Pedro usa myfxbook — es táctico por trade, complementa a Kelly que es estratégico).
 - [ ] Módulo Racha/Sesgo por Sesión (requiere agregar columna SESIÓN al Excel; ya existe la versión por Activo).
 - [ ] Safari fix (workaround FileReader) · App en Dock desde Brave · Filtros en tabla de trades · Throttling Finnhub.
-- [ ] `deploy.sh` tiene el path hardcodeado a `$HOME/Desktop/trading-desk` — falla en sesiones Cowork (su `$HOME` es otro, ver Workflows). Hacerlo detectar la raíz del repo (`git rev-parse --show-toplevel`) en vez de asumir la ruta.
 
 ### Decisiones ya tomadas — no reabrir sin novedad real
 - **Notion "HTML blocks":** descartado para dashboards con API externa — el sandbox de Notion bloquea fetch a APIs externas y el localStorage no sincroniza (inútil para Twelve Data/Finnhub/Firebase). Sirve solo para herramientas 100% autocontenidas.
