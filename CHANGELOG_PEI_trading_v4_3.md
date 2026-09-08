@@ -86,6 +86,18 @@ Commit `5ef022a` preparado en Cowork, falta que Pedro lo pushee desde su Termina
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 3ra) — Earnings por Año → Trimestre — CERRADA, commit local sin pushear
+
+Feature que estaba anotada como "Próxima sesión" desde el 26/08. Nueva card en el tab Earnings, debajo de "Próximos Earnings": `initEarningsHistorico()` lee la colección `earnings_hist` (Firestore, la misma que `persistEarningsHist()` viene llenando sola desde el 07/09 en cada visita al tab) vía `window.peisysGetCollection` — mismo patrón que ya usa la tab Histórico para `trades_history`.
+
+- Selector de año (se puebla solo con los años que tengan datos guardados) + tabla agrupada por Q1/Q2/Q3/Q4: fecha, empresa, EPS estimado/real, sorpresa % (real vs. estimado, coloreado verde/rojo), revenue estimado/real.
+- Botón "Exportar CSV" del año seleccionado — mismo formato ARG que el resto del dashboard (delimitador `;`, coma decimal, BOM para que Excel lo abra bien).
+- **Sin datos para probar todavía:** `earnings_hist` recién empezó a llenarse el 07/09, así que hoy la tabla va a aparecer vacía o con muy poco cargado — no es un bug, es que la colección todavía no acumuló earnings reportados. Se completa sola visitando el tab Earnings de vez en cuando (sin requests extra a Finnhub, usa el fetch normal del tab).
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -121,7 +133,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ Histórico: archivo permanente por mes en Firestore (`trades_history`) + comparativa año a año + gráfico multi-año — pendiente que Pedro confirme las Firestore Rules (ver sesión de arriba)
 - ✅ Mercado: Currency Strength + Commodities (Twelve Data) · RVOL · Flujo Institucional (Barchart, link directo) · Calendario Macro (iframe Investing.com)
 - ✅ Índices: SPX, RUT, SOX, HSTECH, CSI300, MOEX + rotación de sectores
-- ✅ Earnings: watchlist (Apple/Tesla/Nike/Salesforce/Citi/Alibaba) vía Finnhub + histórico perpetuo en Firestore (`earnings_hist`, escribe solo, todavía sin la vista "por año → trimestre")
+- ✅ Earnings: watchlist (Apple/Tesla/Nike/Salesforce/Citi/Alibaba) vía Finnhub + histórico perpetuo en Firestore (`earnings_hist`) + vista "por Año → Trimestre" (nueva 09/09, ver Pendientes) con export CSV formato ARG
 - ✅ Panel Demo vs Live · Sección Análisis (torta, por activo, castigados)
 - ✅ CSV: parser `;` ARG + localStorage + 3 formas de cargar — **CSV Manual** (selector de archivo nativo, hay que repetirlo si el archivo cambia), **Fijar CSV** (File System Access API, solo Chrome/Brave/Edge — habilita Auto-sync cada 30s), **Pegar CSV** (modal con textarea, la más rápida para cargas puntuales)
 - ✅ Puente PEI·SYS: escribe `resumen_trading/actual` en cada `renderAll()` (dashboard separado, solo escritura)
@@ -139,10 +151,6 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ### 🔴 Alta prioridad
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
-
-### 🔵 Próxima sesión — Histórico de Earnings por Q (diseño ya acordado, 26/08)
-Objetivo: que los earnings de la watchlist queden agrupados por año → trimestre y se puedan exportar al Excel a fin de año, usando los datos que `earnings_hist` ya viene acumulando en Firestore desde el 07/09 (decisión tomada: pedir el histórico completo a Finnhub en vez de acumular en localStorage — no se pierde si se borra caché o se cambia de máquina).
-- [ ] Construir la tabla agrupada por año/Q (fecha, EPS estimado/real, sorpresa %, revenue estimado/real) + selector de año + export CSV formato ARG.
 
 ### 🟡 Media prioridad
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.

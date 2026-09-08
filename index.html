@@ -1282,6 +1282,18 @@ body {
         <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
       </div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Histórico por Año → Trimestre</span>
+        <span style="display:flex;gap:8px;align-items:center">
+          <select id="earnings-hist-anio" onchange="renderEarningsHistorico()" style="background:var(--bg-subtle);color:var(--text-primary);border:1px solid var(--border);border-radius:3px;padding:3px 6px;font-family:'DM Mono',monospace;font-size:10px"></select>
+          <button onclick="exportarEarningsHistoricoCSV()" style="background:var(--bg-subtle);color:var(--text-secondary);border:1px solid var(--border);border-radius:3px;padding:3px 8px;font-family:'DM Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;cursor:pointer">↓ Exportar CSV</button>
+        </span>
+      </div>
+      <div id="earnings-hist-container" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ HISTÓRICO TAB ══ -->
@@ -3926,9 +3938,144 @@ function renderEarnings(dataMap) {
   container.innerHTML = html;
 }
 
+// ══════════════════════════════════════
+// EARNINGS — Histórico por Año → Trimestre (diseño acordado 26/08, construido 09/09)
+// Lee 'earnings_hist' (Firestore, mismo proyecto peisys) que persistEarningsHist()
+// viene llenando desde el 07/09 en cada fetch normal del tab. Mismo patrón que
+// initHistoricoTab()/renderHistorico() de la tab Histórico -- lectura vía
+// window.peisysGetCollection, selector de año, export CSV formato ARG.
+// ══════════════════════════════════════
+let earningsHistData = null;
+let earningsHistLoaded = false;
+
+async function initEarningsHistorico() {
+  if (earningsHistLoaded) return;
+  earningsHistLoaded = true;
+  const cont = document.getElementById('earnings-hist-container');
+  if (cont) cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando histórico desde Firestore…</div>`;
+  try {
+    if (typeof window.peisysGetCollection !== 'function') throw new Error('Puente Firestore no disponible (peisysGetCollection)');
+    earningsHistData = await window.peisysGetCollection('earnings_hist');
+    renderEarningsHistorico();
+  } catch (e) {
+    console.error('initEarningsHistorico', e);
+    earningsHistLoaded = false;
+    if (cont) cont.innerHTML = `<div style="color:var(--red);font-size:11px;font-family:'DM Mono',monospace">No se pudo cargar el histórico de earnings: ${e.message}</div>`;
+  }
+}
+
+function aniosEarningsHist() {
+  if (!earningsHistData) return [new Date().getFullYear()];
+  const set = new Set(Object.values(earningsHistData).map(e => e.year).filter(y => y != null));
+  if (!set.size) set.add(new Date().getFullYear());
+  return [...set].sort((a, b) => b - a);
+}
+
+function formatNumEarnings(v) {
+  return (v === null || v === undefined) ? '—' : String(v).replace('.', ',');
+}
+
+function renderEarningsHistorico() {
+  const cont = document.getElementById('earnings-hist-container');
+  if (!cont || !earningsHistData) return;
+
+  const sel = document.getElementById('earnings-hist-anio');
+  const anios = aniosEarningsHist();
+  if (sel && sel.options.length !== anios.length) {
+    const previo = sel.value;
+    sel.innerHTML = anios.map(a => `<option value="${a}">${a}</option>`).join('');
+    if (previo && anios.includes(Number(previo))) sel.value = previo;
+  }
+  const anio = sel && sel.value ? Number(sel.value) : anios[0];
+
+  const entries = Object.values(earningsHistData).filter(e => e.year === anio);
+
+  if (!entries.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin earnings reportados guardados para ${anio} todavía. Se va completando solo en cada visita a este tab (Finnhub free tier no da mucho rango hacia atrás de una).</div>`;
+    return;
+  }
+
+  const porQ = { 1: [], 2: [], 3: [], 4: [] };
+  entries.forEach(e => { if (porQ[e.quarter]) porQ[e.quarter].push(e); });
+
+  const bloques = [1, 2, 3, 4].map(q => {
+    const filas = porQ[q].sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (a.symbol || '').localeCompare(b.symbol || ''));
+    if (!filas.length) return '';
+    const rows = filas.map(e => {
+      const sorpresa = (e.epsActual != null && e.epsEstimate != null && e.epsEstimate !== 0)
+        ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate) * 100)
+        : null;
+      const sorpresaColor = sorpresa === null ? 'var(--text-muted)' : sorpresa >= 0 ? 'var(--green)' : 'var(--red)';
+      return `<tr style="border-bottom:1px solid var(--divider)">
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px">${e.fecha || '—'}</td>
+        <td style="padding:6px 10px;font-size:11px">${e.name || e.symbol}</td>
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;text-align:right">${formatNumEarnings(e.epsEstimate)}</td>
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;text-align:right">${formatNumEarnings(e.epsActual)}</td>
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;text-align:right;color:${sorpresaColor}">${sorpresa === null ? '—' : (sorpresa >= 0 ? '+' : '') + sorpresa.toFixed(1).replace('.', ',') + '%'}</td>
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;text-align:right;color:var(--text-muted)">${e.revenueEstimate != null ? Number(e.revenueEstimate).toLocaleString('es-AR') : '—'}</td>
+        <td style="padding:6px 10px;font-family:'DM Mono',monospace;font-size:11px;text-align:right;color:var(--text-muted)">${e.revenueActual != null ? Number(e.revenueActual).toLocaleString('es-AR') : '—'}</td>
+      </tr>`;
+    }).join('');
+    return `
+      <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;margin:14px 0 4px;padding-left:2px">Q${q}</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--border);text-align:left">
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Fecha</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase">Empresa</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;text-align:right">EPS Est.</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;text-align:right">EPS Real</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;text-align:right">Sorpresa</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;text-align:right">Revenue Est.</th>
+          <th style="padding:6px 10px;font-size:9px;color:var(--text-muted);text-transform:uppercase;text-align:right">Revenue Real</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }).filter(Boolean).join('');
+
+  cont.innerHTML = bloques || `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin earnings reportados guardados para ${anio} todavía.</div>`;
+}
+
+function exportarEarningsHistoricoCSV() {
+  if (!earningsHistData) { alert('Todavía no cargó el histórico.'); return; }
+  const sel = document.getElementById('earnings-hist-anio');
+  const anio = sel && sel.value ? Number(sel.value) : new Date().getFullYear();
+  const entries = Object.values(earningsHistData)
+    .filter(e => e.year === anio)
+    .sort((a, b) => (a.fecha || '').localeCompare(b.fecha || '') || (a.symbol || '').localeCompare(b.symbol || ''));
+
+  if (!entries.length) { alert(`No hay earnings guardados de ${anio} para exportar.`); return; }
+
+  const filas = [['AÑO', 'Q', 'FECHA', 'SIMBOLO', 'EMPRESA', 'EPS ESTIMADO', 'EPS REAL', 'SORPRESA %', 'REVENUE ESTIMADO', 'REVENUE REAL']];
+  entries.forEach(e => {
+    const sorpresa = (e.epsActual != null && e.epsEstimate != null && e.epsEstimate !== 0)
+      ? ((e.epsActual - e.epsEstimate) / Math.abs(e.epsEstimate) * 100)
+      : '';
+    filas.push([
+      e.year, e.quarter, e.fecha, e.symbol, e.name || '',
+      e.epsEstimate ?? '', e.epsActual ?? '',
+      sorpresa === '' ? '' : sorpresa.toFixed(2),
+      e.revenueEstimate ?? '', e.revenueActual ?? ''
+    ]);
+  });
+
+  // Delimitador ';' y coma decimal -- mismo formato ARG que el resto del dashboard
+  const csv = filas.map(f => f.map(v => String(v).replace('.', ',')).join(';')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `earnings_historico_${anio}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 function initEarningsTab() {
-  if (earningsLoaded) return;
-  fetchEarnings().then(() => { earningsLoaded = true; });
+  if (!earningsLoaded) {
+    fetchEarnings().then(() => { earningsLoaded = true; });
+  }
+  initEarningsHistorico();
 }
 
 function initMercadoTab() {
