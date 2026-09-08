@@ -106,6 +106,14 @@ Fila 32 de la hoja DASHBOARD (`tracker_bitacora_traiding__DEFINITIVO.xlsx`) era 
 
 ---
 
+## Sesión 2026-09-08 (Cowork, 5ta) — Embed del dashboard en Notion — CERRADA
+
+Agregada sección "🖥️ Trading Desk — Dashboard en vivo" en la página Notion "📒 Bitácora Trading 2026" (la que ya decía "complementa el Excel Trading Desk"), justo debajo de la intro y antes de "Cómo usar esta bitácora". Es un bloque `<embed>` apuntando a `https://pedritozar.github.io/trading-desk/` — el fetch de la API lo devuelve como bloque embed real, no como link plano, así que se guardó bien. **Sin verificar visualmente todavía:** GitHub Pages no manda `X-Frame-Options` por default así que debería dejarse iframear sin problema, pero confirmá abriendo la página en Notion que el dashboard carga adentro y no una pantalla en blanco/error de CSP.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -163,7 +171,6 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ### 🟡 Media prioridad
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
-- [ ] Embed del dashboard en Notion (`/embed` + URL de GitHub Pages).
 - [ ] Probar Currency Strength con mercados europeos abiertos (4AM ARG).
 - [ ] Re-rendir examen TESLA+MALETA — objetivo 9/10 (fallas previas: T1, T5, M6, ver Checklists abajo).
 - [ ] Auditoría Notion "Venture Capital Firm" — acciones manuales de Pedro (Claude no puede borrar vía API): borrar boilerplate del template, resolver 2 páginas "BCE" duplicadas, confirmar si "PORTAFOLIO INSTITUCIONAL" es el mismo fondo Alfy, renombrar la raíz.
