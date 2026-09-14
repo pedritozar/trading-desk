@@ -1312,6 +1312,16 @@ body {
       <div class="card-title"><span>Evolución multi-año (R acumulado)</span></div>
       <div style="padding:12px 0"><canvas id="historico-chart" height="80"></canvas></div>
     </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Riesgo rolling (Sharpe/Volatilidad de R, ventana móvil)</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">cuenta real · ventana 3 meses</span>
+      </div>
+      <div id="rolling-risk-container" style="padding:8px 0">
+        <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
+      </div>
+      <div class="rvol-disclaimer">No es un Sharpe Ratio de manual (ese usa retornos % contra una tasa libre de riesgo) — es media/desvío de R mensual, un proxy propio para ver si la consistencia mejora o empeora mes a mes. Rolling Alpha/Beta vs S&amp;P 500 quedan pendientes (ver CHANGELOG).</div>
+    </div>
   </div>
 
   <!-- ══ CONFIG TAB ══ -->
@@ -1979,6 +1989,11 @@ function set(id, val) {
 let chartEquity = null;
 let chartActivoBars = null;
 let chartHistorico = null;
+let chartRollingRisk = null;
+// Ventana (en meses) para el Sharpe/Volatilidad "rolling" de la cuenta real -- 3 en vez
+// de 12 (estándar institucional) porque la bitácora recién tiene unos meses de historia
+// (ver tab Histórico); a medida que se acumulen más meses archivados esto se puede subir.
+const ROLLING_RISK_VENTANA = 3;
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -3175,6 +3190,7 @@ function renderHistorico() {
   `;
 
   renderHistoricoChart(meses);
+  renderRollingRisk();
 }
 
 function renderHistoricoChart(meses) {
@@ -3188,6 +3204,113 @@ function renderHistoricoChart(meses) {
     type: 'line',
     data: { labels, datasets: [{ label: 'R acumulado', data: dataAcum, borderColor: '#4ade80', backgroundColor: 'rgba(74,222,128,0.1)', fill: true, tension: 0.2 }] },
     options: { responsive: true, plugins: { legend: { display: false } }, scales: { x: { ticks: { color: '#888' } }, y: { ticks: { color: '#888' } } } }
+  });
+}
+
+// ══════════════════════════════════════
+// RIESGO ROLLING — Sharpe(R) y Volatilidad(R), cuenta real
+// Claude Sonnet 5 — 2026-09-14
+// Inspirado en un dashboard institucional que Pedro mostró (curvas de rolling
+// Sharpe/Vol/Alpha/Beta) -- de esas 4, estas 2 son las que se pueden armar HOY
+// sin datos nuevos: se calculan sobre la misma serie mensual de R que ya arma
+// Histórico (trades_history + mes en curso), sin depender de Twelve Data ni de
+// una curva de equity en $ que la bitácora no lleva.
+// ⚠ OJO -- no es un Sharpe Ratio "de manual": ese se calcula sobre retornos %
+// de una curva de equity contra una tasa libre de riesgo. Acá se calcula sobre
+// R acumulado por mes (unidad de riesgo de la bitácora, no % de capital) y sin
+// risk-free (asumido 0). Es un proxy consistente para comparar la propia
+// consistencia mes a mes -- no es comparable con el Sharpe de un fondo real.
+// Rolling Alpha/Beta vs S&P 500 (los otros 2 paneles del dashboard de Pedro)
+// quedan afuera de este primer paso -- ver Pendientes en el CHANGELOG.
+// ══════════════════════════════════════
+
+// Arma la serie mensual de R combinando lo ya archivado en Firestore
+// (trades_history, vía historicoData) + el mes en curso calculado en vivo desde
+// `trades` (el mes en curso nunca se archiva, así que no está en historicoData).
+function construirSerieMensualR() {
+  const serie = [];
+  if (historicoData) {
+    Object.values(historicoData).forEach(m => {
+      serie.push({ anio: m.anio, mes: m.mes, totalPnl: m.resumen?.totalPnl || 0 });
+    });
+  }
+  const hoy = new Date();
+  const anioActual = hoy.getFullYear(), mesActual = hoy.getMonth() + 1;
+  const yaArchivado = serie.some(m => m.anio === anioActual && m.mes === mesActual);
+  if (!yaArchivado && trades.length) {
+    const tradesDelMes = trades.filter(t => {
+      const f = new Date(col(t, 'fecha'));
+      return !isNaN(f) && f.getFullYear() === anioActual && (f.getMonth() + 1) === mesActual;
+    });
+    if (tradesDelMes.length) {
+      serie.push({ anio: anioActual, mes: mesActual, totalPnl: calcSistema(tradesDelMes).totalPnl });
+    }
+  }
+  return serie.sort((a, b) => (a.anio * 12 + a.mes) - (b.anio * 12 + b.mes));
+}
+
+// Media y desvío estándar muestral (n-1) de un array de números.
+function mediaYDesvio(arr) {
+  const n = arr.length;
+  const media = arr.reduce((a, b) => a + b, 0) / n;
+  if (n < 2) return { media, desvio: 0 };
+  const varianza = arr.reduce((a, b) => a + (b - media) ** 2, 0) / (n - 1);
+  return { media, desvio: Math.sqrt(varianza) };
+}
+
+// Sharpe(R) y Volatilidad(R) en ventana móvil de `ventana` meses.
+function calcularRollingRiskSerie(serieMensual, ventana) {
+  const out = [];
+  for (let i = ventana - 1; i < serieMensual.length; i++) {
+    const tramo = serieMensual.slice(i - ventana + 1, i + 1).map(m => m.totalPnl);
+    const { media, desvio } = mediaYDesvio(tramo);
+    const m = serieMensual[i];
+    out.push({
+      label: MESES_ABREV[m.mes - 1] + ' ' + String(m.anio).slice(2),
+      sharpeR: desvio > 0 ? media / desvio : 0,
+      volR: desvio
+    });
+  }
+  return out;
+}
+
+function renderRollingRisk() {
+  const cont = document.getElementById('rolling-risk-container');
+  if (!cont) return;
+  const serieMensual = construirSerieMensualR();
+
+  if (serieMensual.length < ROLLING_RISK_VENTANA) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:20px 0">
+      Necesitás al menos ${ROLLING_RISK_VENTANA} meses con trades para esta ventana rolling (hoy: ${serieMensual.length} mes(es)). Se completa solo con el tiempo.
+    </div>`;
+    if (chartRollingRisk) { chartRollingRisk.destroy(); chartRollingRisk = null; }
+    return;
+  }
+
+  const serieRisk = calcularRollingRiskSerie(serieMensual, ROLLING_RISK_VENTANA);
+  cont.innerHTML = `<div style="padding:8px 0"><canvas id="rolling-risk-chart" height="80"></canvas></div>`;
+
+  const canvas = document.getElementById('rolling-risk-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  if (chartRollingRisk) chartRollingRisk.destroy();
+  chartRollingRisk = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: serieRisk.map(s => s.label),
+      datasets: [
+        { label: `Sharpe(R) rolling ${ROLLING_RISK_VENTANA}m`, data: serieRisk.map(s => s.sharpeR), borderColor: '#4ade80', backgroundColor: 'transparent', tension: 0.2, yAxisID: 'y' },
+        { label: `Volatilidad(R) rolling ${ROLLING_RISK_VENTANA}m`, data: serieRisk.map(s => s.volR), borderColor: '#f87171', backgroundColor: 'transparent', tension: 0.2, yAxisID: 'y1' }
+      ]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: true, labels: { color: '#888', font: { size: 9 } } } },
+      scales: {
+        x: { ticks: { color: '#888' } },
+        y: { position: 'left', ticks: { color: '#4ade80' }, title: { display: true, text: 'Sharpe(R)', color: '#4ade80' } },
+        y1: { position: 'right', ticks: { color: '#f87171' }, grid: { drawOnChartArea: false }, title: { display: true, text: 'Volatilidad(R)', color: '#f87171' } }
+      }
+    }
   });
 }
 

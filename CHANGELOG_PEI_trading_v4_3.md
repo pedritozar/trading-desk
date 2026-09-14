@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-08 (sesión Cowork — poda general: sesiones cerradas del 26/08 al 07/09 comprimidas al historial; sección "Lecciones" nueva, no podable, para que errores repetidos como el TDZ no se vuelvan a perder; housekeeping de la carpeta: ~1.7MB de backups viejos eliminados)
+**Última actualización:** 2026-09-14 (sesión Cowork — feature Riesgo Rolling en tab Histórico; control general de carpeta)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -142,6 +142,30 @@ Pedro probó el fix de cache de la sesión anterior en la URL en vivo (`https://
 
 ---
 
+## Sesión 2026-09-14 (Cowork) — Feature Riesgo Rolling (Sharpe/Vol de R) + control de carpeta — CERRADA, commit local sin pushear
+
+Pedro mostró una foto de un dashboard institucional genérico (mockup "Vanquish Holdings", típico de fotos aesthetic de setup de trading) con 6 paneles: Performance, Drawdown, Rolling Sharpe Ratio, Rolling Volatility, Rolling Alpha vs S&P 500, Rolling Beta vs S&P 500. Preguntó si tenía sentido implementar algo así.
+
+**Decisión tomada con Pedro:** dos targets separados, en HTML distintos (no mezclar):
+1. **Trading System (esta carpeta)** — cuenta real de trading discrecional (TESLA/MALETA).
+2. **Fondo de Emergencia** — portafolio en un ALyC local, fondo en USD, perfil renta fija, ritmo de seguimiento mucho más lento (no diario). Va en un HTML aparte, todavía no arrancado — ver Pendientes/Backlog abajo.
+
+De los 4 paneles "rolling" del mockup, **Drawdown y Performance acumulada ya existen** (Métricas, Histórico). Se implementaron los 2 más inmediatos que faltaban:
+
+**Rolling Sharpe(R) y Rolling Volatilidad(R) — nuevo card en tab Histórico.** Se calculan sobre la serie mensual de R que ya arma el feature Histórico (trades_history archivado en Firestore + el mes en curso calculado en vivo desde `trades`), en ventana móvil de 3 meses (`ROLLING_RISK_VENTANA`, elegida chica porque la bitácora recién tiene unos meses de historia — subirla a futuro cuando haya más data archivada). No depende de Twelve Data ni de una curva de equity en $ (que la bitácora no lleva) — 100% con datos que ya existen.
+
+⚠ **Aclaración importante, ya documentada como comentario en el código:** no es un Sharpe Ratio de manual (ese se calcula sobre retornos % de una curva de equity contra una tasa libre de riesgo). Acá se calcula sobre R acumulado por mes (la unidad de riesgo de la bitácora) y sin risk-free (asumido 0) — es un proxy propio para ver si la consistencia mes a mes mejora o empeora, no es comparable con el Sharpe de un fondo real. El disclaimer queda visible en el dashboard, debajo del gráfico.
+
+**Rolling Alpha/Beta vs S&P 500 (los otros 2 paneles del mockup) quedaron afuera de este paso** — no se puede armar sin antes definir cómo convertir R por trade en una serie de retornos % comparable contra SPY, y con pocos meses de historia el cálculo sería puro ruido. Anotado en Pendientes.
+
+Funciones nuevas: `construirSerieMensualR()`, `mediaYDesvio()`, `calcularRollingRiskSerie()`, `renderRollingRisk()`. Verificado con `node --check`. `index.html` sincronizado con la fuente.
+
+**Control general de la carpeta:** repo limpio (sin cambios sin commitear al empezar la sesión), sin locks de git colgados después de esta sesión. Nota: el commit `c202ad6` (fix 429, sesión 7ma) todavía no estaba pusheado a origin al momento de arrancar esta sesión — falta el `git push origin main` de Pedro para esa sesión y esta.
+
+*Cerrado: 2026-09-14, sesión Cowork (Claude Sonnet 5).*
+
+---
+
 # PROYECTO 1 — TRADING SYSTEM
 
 ## Stack IA
@@ -201,11 +225,13 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Sacar la API key hardcodeada de Twelve Data del repo público** — hoy cualquiera que use el default comparte el mismo límite de 8 créditos/min con Pedro, lo que puede estar causando/agravando los 429. Pedro puede sacar su propia key gratis y cargarla en Config; ahí se evalúa si conviene sacar el default del código o dejarlo como fallback de todos modos.
 - [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
+- [ ] **Rolling Alpha/Beta vs S&P 500 (cuenta real)** — los 2 paneles del mockup que quedaron afuera de la sesión 14/09. Requiere definir cómo pasar de R por trade a un retorno % comparable con SPY, y juntar más meses de historia archivada (con 3-4 meses el cálculo es ruido). No arrancar hasta tener más data en Histórico.
 - [ ] Probar Currency Strength con mercados europeos abiertos (4AM ARG).
 - [ ] Re-rendir examen TESLA+MALETA — objetivo 9/10 (fallas previas: T1, T5, M6, ver Checklists abajo).
 - [ ] Auditoría Notion "Venture Capital Firm" — acciones manuales de Pedro (Claude no puede borrar vía API): borrar boilerplate del template, resolver 2 páginas "BCE" duplicadas, confirmar si "PORTAFOLIO INSTITUCIONAL" es el mismo fondo Alfy, renombrar la raíz.
 
 ### 🟢 Backlog
+- [ ] **Dashboard de Riesgo para Fondo de Emergencia (HTML aparte, no mezclar con este)** — portafolio en un ALyC local, fondo en USD, perfil renta fija. Orientado al ritmo real del activo (no diario como Mercado acá) — pensado más para seguimiento periódico que para refrescar en vivo. Todavía sin arrancar: falta definir qué datos hay disponibles del ALyC (¿API, export manual, carga a mano?) antes de diseñar qué métricas tienen sentido (probablemente Performance + Drawdown nada más, dado el perfil conservador — Sharpe/Vol/Alpha/Beta rolling tienen menos sentido en renta fija que en una cuenta de trading activo).
 - [ ] Calculadora de lotaje en el dashboard (hoy Pedro usa myfxbook — es táctico por trade, complementa a Kelly que es estratégico).
 - [ ] Módulo Racha/Sesgo por Sesión (requiere agregar columna SESIÓN al Excel; ya existe la versión por Activo).
 - [ ] Safari fix (workaround FileReader) · App en Dock desde Brave · Filtros en tabla de trades · Throttling Finnhub.
