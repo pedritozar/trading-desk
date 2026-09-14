@@ -120,6 +120,7 @@ body {
 .idx-badge { font-size:8px; font-family:'DM Mono',monospace; padding:2px 7px; border:1px solid var(--border); color:var(--text-muted); }
 .idx-badge.live { border-color:var(--green); color:var(--green); }
 .idx-badge.static { border-color:var(--yellow); color:var(--yellow); }
+.idx-badge.closed { border-color:var(--blue); color:var(--blue); }
 .idx-badge.error { border-color:var(--red); color:var(--red); }
 
 /* ── SCROLLBAR ── */
@@ -4596,6 +4597,12 @@ function buildIdxCard(cfg, priceData) {
   const high52 = p.high52 || '—';
   const low52 = p.low52 || '—';
   const isLive = p.isLive || false;
+  // status: 'live' (mercado abierto, precio intradia) | 'closed' (fetch OK pero mercado
+  // cerrado -- ultimo cierre real, ej. HSTECH/CSI300/MOEX fuera de rueda) | 'static'
+  // (el fetch fallo y se usa el numero fijo hardcodeado). Antes 'closed' se mostraba
+  // como ESTATICO, lo cual era enganoso porque el dato SI era real. Fix 14/09.
+  const status = p.status || (isLive ? 'live' : 'static');
+  const sourceLabel = YAHOO_SYMBOLS[cfg.id] ? 'Yahoo Finance' : 'Twelve Data';
 
   const changeClass = change === null ? 'flat' : change > 0 ? 'up' : change < 0 ? 'down' : 'flat';
   const changeSign = change !== null && change > 0 ? '+' : '';
@@ -4656,8 +4663,8 @@ function buildIdxCard(cfg, priceData) {
     </div>
 
     <div class="idx-status-row">
-      <span class="idx-source">Fuente: Twelve Data${isLive ? ' · live' : ' · EOD'}</span>
-      <span class="idx-badge ${isLive ? 'live' : 'static'}">${isLive ? 'LIVE' : 'ESTÁTICO'}</span>
+      <span class="idx-source">Fuente: ${sourceLabel}${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · EOD'}</span>
+      <span class="idx-badge ${status}">${status === 'live' ? 'LIVE' : status === 'closed' ? 'CERRADO' : 'ESTÁTICO'}</span>
     </div>
   </div>`;
 }
@@ -4693,7 +4700,7 @@ async function fetchYahoo(yahooSym) {
                    (prevClose ? ((price - prevClose) / prevClose * 100) : 0);
     const high52 = meta.fiftyTwoWeekHigh || null;
     const low52  = meta.fiftyTwoWeekLow  || null;
-    return { price, change, high52, low52, isLive };
+    return { price, change, high52, low52, isLive, status: isLive ? 'live' : 'closed' };
   } catch(e) {
     console.warn(`Yahoo fetch ${yahooSym} error:`, e.message);
     return null;
