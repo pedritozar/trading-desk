@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-14 (sesión Cowork — feature Riesgo Rolling en tab Histórico; control general de carpeta)
+**Última actualización:** 2026-09-14 (sesión Cowork — feature Riesgo Rolling en tab Histórico; feature Consistencia del gestor (banner racha/ausencia + bitácora de análisis); control general de carpeta)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -161,6 +161,29 @@ De los 4 paneles "rolling" del mockup, **Drawdown y Performance acumulada ya exi
 Funciones nuevas: `construirSerieMensualR()`, `mediaYDesvio()`, `calcularRollingRiskSerie()`, `renderRollingRisk()`. Verificado con `node --check`. `index.html` sincronizado con la fuente.
 
 **Control general de la carpeta:** repo limpio (sin cambios sin commitear al empezar la sesión), sin locks de git colgados después de esta sesión. Nota: el commit `c202ad6` (fix 429, sesión 7ma) todavía no estaba pusheado a origin al momento de arrancar esta sesión — falta el `git push origin main` de Pedro para esa sesión y esta.
+
+*Cerrado: 2026-09-14, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-14 (Cowork, 2da) — Feature "Consistencia del gestor" (banner racha/ausencia + bitácora de análisis) — CERRADA, commit local sin pushear
+
+Pedro pidió investigar (research real, no opinión) cómo la banca/academia/traders profesionales piensan la constancia mes a mes, para diseñar un feature que le hable a él mismo: si pasa mucho tiempo sin gestionar, que el dashboard se lo diga con un mensaje que **él mismo escribió antes**; si viene sosteniendo una racha, ídem en positivo.
+
+**Research (con fuentes):**
+- Bridgewater/Dalio usa un **Issue Log** y un **Pain Button** — el trader anota su error o frustración en el momento, como dato para ver el patrón después, no como autocastigo puntual.
+- **Commitment device** de economía del comportamiento (Thaler & Benartzi, "Save More Tomorrow") — la persona de HOY, con la cabeza fría, le deja una instrucción pre-escrita a la persona de dentro de unas semanas, y el sistema la ejecuta solo. Es el mecanismo exacto que arma este feature: Pedro escribe el mensaje en ⚙ Config, el dashboard solo lo entrega cuando se cumple la condición — nunca genera ni suaviza el texto.
+- Locke & Mann (*Journal of Financial Economics*, "Professional trader discipline and trade disposition") y literatura de rutina pre-mercado: lo que distingue al profesional no es el timing, es la consistencia de proceso — "lo que importa no es la perfección, es correr la rutina todos los días, sin importar cuán confiado te sentís"; cuando la rutina se rompe, lo que aparece es toma de decisión emocional (FOMO, revenge trade).
+
+**Implementado:**
+- **Bitácora de análisis** (card nueva en Overview): textarea + botón para anotar un escenario/análisis del día, aunque no haya trade — nueva colección Firestore `bitacora_analisis` (mismo puente peisys). Un día sin operar pero con análisis real cuenta como actividad real de gestor.
+- **"Actividad de gestor"** = fecha del último trade cargado O de la última entrada de bitácora (lo que sea más reciente).
+- **Banner de consistencia** (arriba de todo en Overview, imposible de no ver): si pasaron ≥ N días sin actividad (default 14, configurable), muestra un mensaje del pool de "ausencia" que Pedro escribió; si hay ≥ M semanas consecutivas con actividad (default 3, configurable), muestra un mensaje del pool de "racha". Si no se cumple ninguna condición, muestra solo el dato neutral ("última actividad: hace X días"). El mensaje rota entre los que Pedro cargó (uno por línea en Config), determinístico por día — no cambia en cada refresh, sí cambia día a día.
+- **⚙ Config → nueva card "Consistencia del gestor":** umbral de días para ausencia, umbral de semanas para racha, y dos textareas (mensajes de ausencia / mensajes de racha, uno por línea). Todo en localStorage, mismo criterio que las API keys ("se guarda en este navegador").
+- Aplica igual a cuenta personal, demo, y el día de mañana fondeada — la métrica es "¿estás gestionando?", no de qué cuenta.
+- `renderBannerConsistencia` agregado al pipeline de `renderAll()` (aislado en su propio try/catch, Lección #2). `bitacoraAnalisisData` declarado arriba de `restoreCSV()` (Lección #1 TDZ) porque `renderAll()` puede correr sincrónicamente en el parseo inicial del script.
+
+**Pendiente / a evaluar con el tiempo:** los mensajes y umbrales viven en localStorage (no Firestore) — si Pedro limpia el navegador o cambia de dispositivo, los pierde y hay que volver a tipearlos (bajo costo, pero real). Se dejó así por consistencia con cómo ya funciona el resto de ⚙ Config, no por limitación técnica — si en algún momento pesa la pérdida, migrar a Firestore es directo (mismo patrón que `trades_history`).
 
 *Cerrado: 2026-09-14, sesión Cowork (Claude Sonnet 5).*
 

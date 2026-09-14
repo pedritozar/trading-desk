@@ -851,6 +851,25 @@ body {
       </select>
     </div>
 
+    <!-- Consistencia del gestor: banner racha/ausencia + bitácora de análisis -->
+    <div class="card" id="banner-consistencia" style="margin-bottom:16px;border-left:3px solid var(--border);display:none"></div>
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">
+        <span>Bitácora de análisis</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">cuenta como actividad, aunque no haya trade ese día</span>
+      </div>
+      <div style="padding:8px 0">
+        <textarea id="bitacora-analisis-input" class="config-input" rows="2" placeholder="Escenario, análisis o nota de hoy (no hace falta que haya trade)"></textarea>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+          <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:6px 12px" onclick="guardarEntradaBitacora()">Guardar entrada</button>
+          <span id="bitacora-analisis-status" style="font-size:11px;color:var(--green)"></span>
+        </div>
+        <div id="bitacora-analisis-lista" style="margin-top:10px">
+          <div style="color:var(--text-muted);font-size:11px">Cargando…</div>
+        </div>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div class="kpi-grid" id="kpi-grid">
       <div class="kpi-card">
@@ -1355,6 +1374,36 @@ body {
         <div class="config-hint">Los cambios se aplican de inmediato (sin recargar) para los próximos fetch. Si el campo queda vacío, se usa la key por defecto guardada en el archivo.</div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Consistencia del gestor</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">mensajes tuyos — el dashboard solo los entrega, no los genera</span>
+      </div>
+      <div style="padding:8px 0">
+        <div class="config-row">
+          <label class="config-label">Días sin actividad para mostrar alerta</label>
+          <input type="number" id="cfg-umbral-ausencia" class="config-input" min="1" placeholder="14">
+        </div>
+        <div class="config-row">
+          <label class="config-label">Semanas consecutivas para racha positiva</label>
+          <input type="number" id="cfg-umbral-racha" class="config-input" min="1" placeholder="3">
+        </div>
+        <div class="config-row">
+          <label class="config-label">Mensajes de ausencia (uno por línea — rota entre ellos)</label>
+          <textarea id="cfg-mensajes-ausencia" class="config-input" rows="4" placeholder="Che, hace 2 semanas que no entrás..."></textarea>
+        </div>
+        <div class="config-row">
+          <label class="config-label">Mensajes de racha positiva (uno por línea — rota entre ellos)</label>
+          <textarea id="cfg-mensajes-racha" class="config-input" rows="4" placeholder="Vas 3 semanas seguidas gestionando en serio..."></textarea>
+        </div>
+        <div style="display:flex;gap:10px;align-items:center">
+          <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigConsistencia()">Guardar</button>
+          <span id="cfg-consistencia-status" style="font-size:11px;color:var(--green)"></span>
+        </div>
+        <div class="config-hint">Se guardan en este navegador, igual que las API keys. El dashboard nunca escribe ni edita estos mensajes — solo los muestra cuando se cumple la condición que configuraste arriba.</div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1496,6 +1545,36 @@ function initConfigTab() {
   if (tEl) tEl.value = TWELVE_DATA_KEY;
   if (pEl) pEl.value = PROXY_CORS_URL;
   checkFinnhubLen();
+
+  const uaEl = document.getElementById('cfg-umbral-ausencia');
+  const urEl = document.getElementById('cfg-umbral-racha');
+  const maEl = document.getElementById('cfg-mensajes-ausencia');
+  const mrEl = document.getElementById('cfg-mensajes-racha');
+  if (uaEl) uaEl.value = localStorage.getItem('pei_umbral_ausencia_dias') || '14';
+  if (urEl) urEl.value = localStorage.getItem('pei_umbral_racha_semanas') || '3';
+  if (maEl) maEl.value = localStorage.getItem('pei_mensajes_ausencia') || '';
+  if (mrEl) mrEl.value = localStorage.getItem('pei_mensajes_racha') || '';
+}
+
+function guardarConfigConsistencia() {
+  const uaEl = document.getElementById('cfg-umbral-ausencia');
+  const urEl = document.getElementById('cfg-umbral-racha');
+  const maEl = document.getElementById('cfg-mensajes-ausencia');
+  const mrEl = document.getElementById('cfg-mensajes-racha');
+
+  const uaVal = parseInt(uaEl?.value, 10);
+  const urVal = parseInt(urEl?.value, 10);
+  if (uaVal > 0) localStorage.setItem('pei_umbral_ausencia_dias', String(uaVal));
+  if (urVal > 0) localStorage.setItem('pei_umbral_racha_semanas', String(urVal));
+  localStorage.setItem('pei_mensajes_ausencia', maEl?.value || '');
+  localStorage.setItem('pei_mensajes_racha', mrEl?.value || '');
+
+  renderBannerConsistencia();
+  const status = document.getElementById('cfg-consistencia-status');
+  if (status) {
+    status.textContent = `✓ Guardado ${new Date().toLocaleTimeString('es-AR')}`;
+    setTimeout(() => { status.textContent = ''; }, 4000);
+  }
 }
 
 function checkFinnhubLen() {
@@ -1811,6 +1890,12 @@ setInterval(fetchPrices, 60000); // refresh cada 60s
 // CSV IMPORT
 // ══════════════════════════════════════
 let trades = [];
+// Entradas de la bitácora de análisis (Firestore 'bitacora_analisis') -- cargadas async
+// por initBitacoraAnalisis() (DOMContentLoaded). Declarada acá (no más abajo, junto a sus
+// funciones) porque renderBannerConsistencia() se llama desde renderAll(), y renderAll()
+// puede correr sincrónicamente durante el parseo inicial del script vía la IIFE
+// restoreCSV() de más abajo -- Lección #1 del CHANGELOG (TDZ), no repetir el error.
+let bitacoraAnalisisData = [];
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -1925,7 +2010,7 @@ function renderAll() {
     renderKPIs, renderEquity, renderTrades, renderActivoBars, renderSistema,
     renderCalendar, renderDistribucion, renderMetricas, renderMetaCuenta,
     renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS,
-    archivarMesesCerrados
+    archivarMesesCerrados, renderBannerConsistencia
   ];
   for (const fn of pasos) {
     try { fn(); } catch (e) { console.error(`renderAll: fallo ${fn.name}`, e); }
@@ -3054,6 +3139,156 @@ async function actualizarResumenPEISYS() {
     console.warn('Puente PEI·SYS: no se pudo actualizar resumen_trading', e);
     const el = document.getElementById('status-puente');
     if (el) el.textContent = '✕ PEI·SYS sync error';
+  }
+}
+
+// ══════════════════════════════════════
+// CONSISTENCIA DEL GESTOR — banner de racha/ausencia + bitácora de análisis
+// Claude Sonnet 5 — 2026-09-14
+// Origen: Pedro pidió investigar cómo bancas/academia/traders profesionales
+// piensan la constancia mes a mes (no el resultado puntual). Dos hallazgos
+// concretos que arman el diseño de acá:
+// 1) Bridgewater (Dalio) usa un "Issue Log" y un "Pain Button" -- el propio
+//    trader anota su error/frustración en el momento, como dato, no como
+//    autocastigo; el patrón se lee después, no el episodio aislado.
+// 2) "Commitment device" de economía del comportamiento (Thaler & Benartzi,
+//    Save More Tomorrow): la persona de HOY (cabeza fría) le deja una
+//    instrucción pre-escrita a la persona de DENTRO DE UNAS SEMANAS (cabeza
+//    caliente/dispersa), y el sistema la ejecuta solo, sin pedir permiso de
+//    nuevo. Por eso el mensaje lo escribe Pedro en ⚙ Config -- este código
+//    NO genera ni suaviza texto, solo lo entrega cuando se cumple la condición.
+// "Actividad de gestor" = cargar un trade nuevo O anotar una entrada acá
+// abajo (para que un día sin operar pero con análisis real cuente igual).
+// ══════════════════════════════════════
+
+async function initBitacoraAnalisis() {
+  if (typeof window.peisysGetCollection !== 'function') return;
+  try {
+    const coleccion = await window.peisysGetCollection('bitacora_analisis');
+    bitacoraAnalisisData = Object.values(coleccion || {}).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+    renderBitacoraAnalisis();
+    renderBannerConsistencia();
+  } catch (e) {
+    console.warn('initBitacoraAnalisis: no se pudo cargar', e);
+  }
+}
+
+async function guardarEntradaBitacora() {
+  const ta = document.getElementById('bitacora-analisis-input');
+  const texto = (ta?.value || '').trim();
+  if (!texto) return;
+  const statusEl = document.getElementById('bitacora-analisis-status');
+  if (typeof window.peisysSetDoc !== 'function') {
+    if (statusEl) statusEl.textContent = '✕ Puente PEI·SYS no disponible';
+    return;
+  }
+  try {
+    const fecha = new Date().toISOString();
+    const docId = Date.now().toString();
+    await window.peisysSetDoc('bitacora_analisis', docId, { fecha, texto });
+    bitacoraAnalisisData.unshift({ fecha, texto });
+    ta.value = '';
+    renderBitacoraAnalisis();
+    renderBannerConsistencia();
+    if (statusEl) { statusEl.textContent = '✓ Guardado'; setTimeout(() => { statusEl.textContent = ''; }, 3000); }
+  } catch (e) {
+    console.warn('guardarEntradaBitacora: no se pudo guardar', e);
+    if (statusEl) statusEl.textContent = '✕ Error al guardar';
+  }
+}
+
+function renderBitacoraAnalisis() {
+  const cont = document.getElementById('bitacora-analisis-lista');
+  if (!cont) return;
+  if (!bitacoraAnalisisData.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px">Sin entradas todavía.</div>`;
+    return;
+  }
+  cont.innerHTML = bitacoraAnalisisData.slice(0, 5).map(e => `
+    <div style="padding:6px 0;border-bottom:1px solid var(--divider);font-size:11px">
+      <span style="color:var(--text-muted);font-family:'DM Mono',monospace">${new Date(e.fecha).toLocaleDateString('es-AR')}</span>
+      <span style="margin-left:8px">${(e.texto || '').replace(/</g,'&lt;')}</span>
+    </div>`).join('');
+}
+
+// Última fecha con actividad (trade cargado o entrada de bitácora), o null si no hay nada.
+function calcularUltimaActividadGestor() {
+  const fechas = [];
+  trades.forEach(t => { const f = new Date(col(t, 'fecha')); if (!isNaN(f)) fechas.push(f); });
+  bitacoraAnalisisData.forEach(e => { const f = new Date(e.fecha); if (!isNaN(f)) fechas.push(f); });
+  if (!fechas.length) return null;
+  return new Date(Math.max(...fechas.map(f => f.getTime())));
+}
+
+// Lunes de la semana de una fecha, como clave 'YYYY-MM-DD' (para agrupar actividad por semana).
+function inicioDeSemana(fecha) {
+  const d = new Date(fecha);
+  const dia = d.getDay(); // 0=domingo
+  const diff = (dia === 0 ? -6 : 1) - dia; // corrimiento a lunes
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10);
+}
+
+// Semanas consecutivas (contando la actual hacia atrás) con al menos 1 actividad.
+function calcularRachaSemanasGestor() {
+  const semanasConActividad = new Set();
+  trades.forEach(t => { const f = new Date(col(t, 'fecha')); if (!isNaN(f)) semanasConActividad.add(inicioDeSemana(f)); });
+  bitacoraAnalisisData.forEach(e => { const f = new Date(e.fecha); if (!isNaN(f)) semanasConActividad.add(inicioDeSemana(f)); });
+
+  let racha = 0;
+  let cursor = new Date();
+  while (semanasConActividad.has(inicioDeSemana(cursor))) {
+    racha++;
+    cursor.setDate(cursor.getDate() - 7);
+  }
+  return racha;
+}
+
+// Elige un mensaje del pool de forma determinística por día (mismo mensaje todo el día,
+// cambia al día siguiente) -- rota sin sentirse random en cada refresh de la página.
+function elegirMensajeDelDia(pool) {
+  if (!pool.length) return '';
+  const diaDelAnio = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  return pool[diaDelAnio % pool.length];
+}
+
+function leerPoolMensajes(key) {
+  try {
+    return (localStorage.getItem(key) || '').split('\n').map(s => s.trim()).filter(Boolean);
+  } catch (e) { return []; }
+}
+
+function renderBannerConsistencia() {
+  const cont = document.getElementById('banner-consistencia');
+  if (!cont) return;
+
+  const ultima = calcularUltimaActividadGestor();
+  if (!ultima) { cont.style.display = 'none'; return; }
+
+  const umbralAusencia = parseInt(localStorage.getItem('pei_umbral_ausencia_dias'), 10) || 14;
+  const umbralRacha = parseInt(localStorage.getItem('pei_umbral_racha_semanas'), 10) || 3;
+  const gapDias = Math.floor((Date.now() - ultima.getTime()) / 86400000);
+  const racha = calcularRachaSemanasGestor();
+  const fechaFmt = ultima.toLocaleDateString('es-AR');
+
+  cont.style.display = 'block';
+
+  if (gapDias >= umbralAusencia) {
+    const msg = elegirMensajeDelDia(leerPoolMensajes('pei_mensajes_ausencia'));
+    cont.style.borderColor = 'var(--red)';
+    cont.innerHTML = `
+      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">⚠ ${gapDias} días sin actividad (última: ${fechaFmt})</div>
+      ${msg ? `<div style="font-size:13px;color:var(--text-primary)">${msg.replace(/</g,'&lt;')}</div>` : `<div style="font-size:11px;color:var(--text-muted)">Escribí tu propio mensaje de ausencia en ⚙ Config.</div>`}`;
+  } else if (racha >= umbralRacha) {
+    const msg = elegirMensajeDelDia(leerPoolMensajes('pei_mensajes_racha'));
+    cont.style.borderColor = 'var(--green)';
+    cont.innerHTML = `
+      <div style="font-size:9px;color:var(--green);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">✓ ${racha} semanas consecutivas de actividad</div>
+      ${msg ? `<div style="font-size:13px;color:var(--text-primary)">${msg.replace(/</g,'&lt;')}</div>` : `<div style="font-size:11px;color:var(--text-muted)">Escribí tu propio mensaje de racha en ⚙ Config.</div>`}`;
+  } else {
+    cont.style.borderColor = 'var(--border)';
+    cont.innerHTML = `<div style="font-size:11px;color:var(--text-muted)">Última actividad: hace ${gapDias} día(s) (${fechaFmt})</div>`;
   }
 }
 
@@ -4614,6 +4849,7 @@ initAutoSync();
   // (por si los trades se restauraron desde localStorage antes de que este script corriera).
   window.addEventListener('DOMContentLoaded', () => {
     if (typeof window.actualizarResumenPEISYS === 'function') window.actualizarResumenPEISYS();
+    initBitacoraAnalisis();
   });
 </script>
 </body>
