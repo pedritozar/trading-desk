@@ -131,7 +131,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ Panel Demo vs Live · Sección Análisis (torta, por activo, castigados)
 - ✅ CSV: parser `;` ARG + localStorage + 3 formas de cargar — **CSV Manual** (selector de archivo nativo, hay que repetirlo si el archivo cambia), **Fijar CSV** (File System Access API, solo Chrome/Brave/Edge — habilita Auto-sync cada 30s), **Pegar CSV** (modal con textarea, la más rápida para cargas puntuales)
 - ✅ Puente PEI·SYS: escribe `resumen_trading/actual` en cada `renderAll()` (dashboard separado, solo escritura)
-- ⚠️ **Pendiente, acción de Pedro:** CORS de Yahoo Finance en Índices (HSTECH/MOEX/CSI300 en blanco) — `cloudflare_worker_proxy.js` ya está listo, solo falta que Pedro lo deploye en su cuenta de Cloudflare (5 min, instrucciones en el propio archivo) y pegue la URL en Config.
+- ✅ **CORS de Yahoo Finance en Índices — RESUELTO 14/09.** Worker deployado por Pedro (`pei-cors-proxy.pzacarias18.workers.dev`). Verificado a mano contra los 3 símbolos vía la URL del proxy en el navegador (no simulado): MOEX (`IMOEX.ME`) y CSI300 (`000300.SS`) ya devolvían datos reales — el símbolo estaba bien, solo faltaba el proxy. **HSTECH tenía además un segundo bug real:** el código usaba `%5EHSTECH` (`^HSTECH`), que Yahoo no reconoce (`"error":{"code":"Not Found"}`) — el ticker correcto es `HSTECH.HK`. Corregido en `YAHOO_SYMBOLS` (línea ~4667). `node --check` OK, `index.html` sincronizado.
+- ⚠️ **Pendiente, acción de Pedro:** pegar la URL del proxy (`https://pei-cors-proxy.pzacarias18.workers.dev`) en ⚙ Config → "Proxy CORS (Cloudflare Worker)" → Guardar, y confirmar visualmente que Índices (HSTECH/MOEX/CSI300) carga en el dashboard real (ya probado el fetch crudo, falta la vuelta completa por la UI).
 - ✅ RTSI (dentro de Mercado): fix aplicado 08/09 (board equivocado en la API de MOEX, no CORS — detalle completo en `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md` si hace falta). Sin verificar en vivo todavía.
 
 ### Archivos HTML
@@ -144,7 +145,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ### 🔴 Alta prioridad
 - [ ] **Pushear 3 commits locales** (`git push origin main` desde tu Terminal real): fix HTTP 429 en Mercado, feature Rolling Sharpe(R)/Volatilidad(R), feature Consistencia del gestor. Cowork no tiene credenciales de GitHub — esto siempre lo corrés vos.
-- [ ] **Firestore Rules de `peisys`:** agregar permiso de `write` (e idealmente `read`) en la colección nueva `bitacora_analisis` — si no, la Bitácora de análisis (Overview) falla en silencio al guardar.
+- [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
@@ -153,7 +154,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
   1. `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿precios reales o error "symbol not found"/plan pago?)
   2. `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿el campo `"volume"` de cada barra viene con números reales o en `"0"`?)
 - [ ] **Sacar la API key hardcodeada de Twelve Data del repo público** — hoy cualquiera que use el default comparte el mismo límite de 8 créditos/min con Pedro, lo que puede estar causando/agravando los 429. Pedro puede sacar su propia key gratis y cargarla en Config; ahí se evalúa si conviene sacar el default del código o dejarlo como fallback de todos modos.
-- [ ] Evaluar CORS de Yahoo Finance en tab Índices (HSTECH/MOEX/CSI300) — sin diagnosticar.
+- [x] ~~Evaluar CORS de Yahoo Finance en tab Índices~~ — resuelto 14/09, ver Estado actual arriba.
 - [ ] Probar **FMP (Financial Modeling Prep)** para el calendario económico — única opción gratis (250 req/día) sin probar todavía para la alerta 30min antes. Ya descartados: Finnhub premium (`/calendar/economic` da 403 en el tier gratis), TradingEconomics (pago desde USD 39/mes), Investing.com (cuenta de usuario, no da API), TradingView (solo widget embebido).
 - [ ] **Rolling Alpha/Beta vs S&P 500 (cuenta real)** — los 2 paneles del mockup que quedaron afuera de la sesión 14/09. Requiere definir cómo pasar de R por trade a un retorno % comparable con SPY, y juntar más meses de historia archivada (con 3-4 meses el cálculo es ruido). No arrancar hasta tener más data en Histórico.
 - [ ] Probar Currency Strength con mercados europeos abiertos (4AM ARG).
