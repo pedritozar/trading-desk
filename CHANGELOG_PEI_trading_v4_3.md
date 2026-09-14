@@ -203,14 +203,16 @@ Mudado a `RESEARCH_ideas_wallstreet.txt` (misma carpeta) — archivo aparte, fec
 ```bash
 cd ~/Desktop/trading-desk
 rm -f .git/index.lock          # el lock aparece solo, es falso positivo
+./check_folder.sh              # NUEVO 14/09 -- corta acá si hay algo fuera de lugar
 cp "HTML- DASBOARD/NO_ABRIR_fuente_para_editar.html" ./index.html
 git add index.html "HTML- DASBOARD/NO_ABRIR_fuente_para_editar.html"
 git commit -m "mensaje"
 git push origin main
 ```
+> **`check_folder.sh` — revisión estricta antes de `git add` (nuevo 14/09).** Pedido de Pedro tras encontrar `SPEC_zar_vanguard_capital_partners.md`/`CHANGELOG_zar_vanguard_capital_partners.md` (de OTRO proyecto, Fondo de Emergencia) sueltos dentro de `trading-desk/` — una sesión de Cowork los había escrito ahí por error. El script compara el contenido de la raíz contra una lista blanca de lo que pertenece a este repo; si aparece algo nuevo no reconocido (carpeta o archivo) imprime **🔴 ALERTA ROJA** con el detalle y corta con exit 1 — `deploy.sh` ya lo llama automáticamente antes de tocar `git add` y aborta el deploy si hay alerta. Si da **✅ OK**, todo coincide y se puede seguir. Si Pedro agrega un archivo/carpeta legítima nueva al repo, hay que sumarla a `ALLOWED_FILES`/`ALLOWED_DIRS` dentro de `check_folder.sh`, si no el script la va a marcar como alerta para siempre.
 > Si el push falla con "Invalid username or token": el PAT venció. Generar uno nuevo en github.com/settings/tokens (scope `repo`), guardarlo en Notion, y `git remote set-url origin https://pedritozar:TOKEN@github.com/pedritozar/trading-desk.git`
 
-> ⚠️ **Desde una sesión de Cowork** `deploy.sh` falla — su `$HOME` no es `/Users/pedritozar` (ver pendiente en Backlog). Mientras no se arregle: repetir los mismos comandos a mano usando la ruta montada (`$HOME/mnt/trading-desk` dentro de esa sesión) en vez de `~/Desktop/trading-desk`. Cowork tampoco tiene credenciales de GitHub — el commit se prepara ahí y el `git push` final SIEMPRE lo corre Pedro desde su Terminal real. Si aparece un `.git/index.lock` o `.git/HEAD.lock` que `rm` no puede borrar ("Operation not permitted"), usar `mv` para sacarlo del camino en vez de `rm` — probado y funciona.
+> ⚠️ **Desde una sesión de Cowork** `deploy.sh` falla — su `$HOME` no es `/Users/pedritozar` (ver pendiente en Backlog). Mientras no se arregle: repetir los mismos comandos a mano usando la ruta montada (`$HOME/mnt/trading-desk` dentro de esa sesión) en vez de `~/Desktop/trading-desk` — **incluyendo `./check_folder.sh` antes de cualquier `git add`**, no solo cuando se corre `deploy.sh` entero. Cowork tampoco tiene credenciales de GitHub — el commit se prepara ahí y el `git push` final SIEMPRE lo corre Pedro desde su Terminal real. Si aparece un `.git/index.lock` o `.git/HEAD.lock` que `rm` no puede borrar ("Operation not permitted"), usar `mv` para sacarlo del camino en vez de `rm` — probado y funciona.
 
 ### CSV → Dashboard (3 formas, ver "Estado actual" arriba para el detalle de cada una)
 1. Exportar CSV desde el Excel (hoja `resultados traiding`) o pegar directo el texto que te paso en el chat.

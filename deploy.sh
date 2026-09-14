@@ -9,6 +9,14 @@ if [ -z "$REPO_DIR" ]; then
   echo "❌ No estás dentro del repo trading-desk (git rev-parse falló)"; exit 1
 fi
 cd "$REPO_DIR" || { echo "❌ No se pudo entrar a $REPO_DIR"; exit 1; }
+
+# Revisión estricta de la carpeta ANTES de tocar git add (pedido de Pedro
+# 14/09, tras encontrar archivos de otro proyecto sueltos acá). Si hay algo
+# fuera de lugar, el deploy se corta acá -- no sigue a git add ni commit.
+if [ -x "./check_folder.sh" ]; then
+  ./check_folder.sh || { echo "❌ Deploy cancelado — resolvé la alerta de check_folder.sh primero"; exit 1; }
+fi
+
 cp "$SOURCE" ./index.html || { echo "❌ No se encontró el archivo fuente"; exit 1; }
 git add index.html
 git commit -m "$MSG"
