@@ -158,6 +158,107 @@ La key estaba guardada a medias: solo la segunda mitad (20 de 40 caracteres). La
 #### 6. Otras decisiones de la sesión
 Notion "HTML blocks" descartado (sandbox bloquea APIs externas). Barchart USD 10/mes no aporta (solo levanta límite de vistas). Kelly Criterion ya implementado, no duplicar en Notion. Auditoría externa futura va a pedir statements del broker o track record verificado.
 
+## Poda 2026-09-14
+
+Contenido completo de las 7 sesiones del 2026-09-08 (Cowork) tal como estaban en `CHANGELOG_PEI_trading_v4_3.md` **antes** de esta poda. Todo lo de acá abajo quedó comprimido en el changelog principal a una fila en "Historial comprimido de sesiones" — las sesiones del 2026-09-14 (Rolling Risk, Consistencia del gestor) NO se podaron todavía porque son del mismo día y sus commits ni siquiera estaban pusheados al momento de la poda.
+
+## Sesión 2026-09-08 (Cowork) — Max Drawdown, TDZ, feature Histórico — CERRADA, todo pusheado
+
+Sesión larga en 4 partes, las 4 cerradas y confirmadas por Pedro en el dashboard real. Commits `f328d96` → `322dd70`, todos pusheados a producción.
+
+1. **Fix Max Drawdown** (`13b7fc9`): mostraba `-108.70%` con pocos R acumulados (pico chico — no era bug de lógica). Ahora muestra R absoluto primero + % de referencia + aviso "muestra chica" si el pico es < 5R. Confirmado en vivo.
+2. **Aislamiento de `renderMetricas()`** (`baac734`): cada bloque en su propio try/catch (Lección #2). Contuvo el daño de lo que resultó ser el bug de abajo, aunque no explicaba la causa todavía.
+3. **TDZ de `DD_MUESTRA_CHICA_R`** (`f2f224c`): causa raíz de "Sin datos" en TESLA/MALETA + Drawdown en blanco — ver Lección #1 para el detalle completo. Confirmado con reproducción Playwright (40 reloads con el CSV real de Pedro: 0/40 errores tras el fix) y por Pedro en el dashboard real.
+4. **Feature nueva — archivo permanente por mes en Firestore + tab Histórico** (`322dd70`): nueva colección `trades_history` (proyecto `peisys`), un doc por mes cerrado (`"YYYY-MM"`) con resumen agregado + desglose TESLA/MALETA + cada trade crudo saneado (Firestore no acepta `/` en claves de campo — headers como `"r/r teórico"` se sanean a `"r_r teórico"`). Se archiva solo al cerrar el mes calendario, nunca el mes en curso. Tab "Histórico" nueva: comparativa año a año + gráfico de R acumulado multi-año + botón "Sincronizar ahora" para forzar/backfill. Verificado con Playwright (Firestore mockeado, sin acceso real desde el sandbox): archiva exactamente el mes correcto, no reescribe de más en reloads sucesivos, sí reescribe al forzar, nunca toca el mes en curso.
+
+### ⚠️ Pendiente — acción manual de Pedro
+- [ ] **Firestore Rules del proyecto `peisys`:** agregar permiso de `read` en `trades_history` (el puente pasó de solo-escritura a también leer). Si la tab Histórico no carga, es esto.
+  ```
+  match /trades_history/{doc} {
+    allow read, write: if true; // o el mismo criterio que ya tenés en earnings_hist
+  }
+  ```
+- [ ] Abrir la tab Histórico y confirmar que carga (usar "Sincronizar ahora" para forzar el archivado de agosto si arranca vacía).
+- [ ] Sigue sin reconfirmarse si Equity Curve y P&L por Activo (Chart.js) renderizan siempre bien con internet real — pedir capturas si vuelve a fallar.
+- [ ] A futuro: sumar a Histórico el desglose por activo/sistema por año, no solo el agregado global (quedó afuera del MVP a propósito).
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 2da) — RTSI, SPY/SPX, deploy.sh — CERRADA, commit local sin pushear
+
+Commit `5ef022a` preparado en Cowork, falta que Pedro lo pushee desde su Terminal (Cowork no tiene credenciales de GitHub, ver Workflows).
+
+1. **Fix RTSI sin datos** (`fetchMOEX()`): causa no era CORS (a diferencia de HSTECH/MOEX/CSI300) sino que RTSI no devuelve `marketdata` bajo el board fijo `SNDX` que sí funciona para IMOEX. Se agregó fallback: si el board fijo no trae datos, reintenta contra el endpoint sin filtro de board (devuelve `marketdata` de todos los boards donde cotiza) y toma la primera fila con valor real. No toca el camino de IMOEX. **Sin verificar en vivo** — MOEX bloquea el fetch tanto desde este sandbox como desde la Mac de Pedro (sin red en ninguna de las dos), así que el fix está razonado a partir de cómo responde la API MOEX ISS documentada, no confirmado con una respuesta real. Confirmar en el dashboard real y avisar si sigue en blanco.
+2. **Desambiguado SPY vs SPX:** tab Precios ahora dice "S&P 500 (SPY)" — el tab Índices sigue con el SPX real sin cambios. Resuelve la inconsistencia anotada en Pendientes.
+3. **`deploy.sh` arreglado:** usa `git rev-parse --show-toplevel` en vez de asumir `~/Desktop/trading-desk` — ya funciona desde sesiones Cowork.
+4. **Formalizado en git** el `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md` — estaba movido a mano a esa carpeta pero git seguía viéndolo como "borrado" de la raíz (contenido intacto, nunca se había hecho `git mv`). Registrado como rename, sin cambios de contenido. Actualizadas las referencias a la ruta nueva en este mismo archivo.
+
+### ⚠️ Pendiente — acción manual de Pedro
+- [ ] Pushear el commit `5ef022a` desde la Terminal real (`cd ~/Desktop/trading-desk && git push origin main`).
+- [ ] Confirmar en el dashboard real (después del push) que RTSI ahora muestra precio en la tab Mercado. Si sigue en blanco, es un board distinto al que probé y hay que abrir consola para ver el error real.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 3ra) — Earnings por Año → Trimestre — CERRADA, commit local sin pushear
+
+Feature que estaba anotada como "Próxima sesión" desde el 26/08. Nueva card en el tab Earnings, debajo de "Próximos Earnings": `initEarningsHistorico()` lee la colección `earnings_hist` (Firestore, la misma que `persistEarningsHist()` viene llenando sola desde el 07/09 en cada visita al tab) vía `window.peisysGetCollection` — mismo patrón que ya usa la tab Histórico para `trades_history`.
+
+- Selector de año (se puebla solo con los años que tengan datos guardados) + tabla agrupada por Q1/Q2/Q3/Q4: fecha, empresa, EPS estimado/real, sorpresa % (real vs. estimado, coloreado verde/rojo), revenue estimado/real.
+- Botón "Exportar CSV" del año seleccionado — mismo formato ARG que el resto del dashboard (delimitador `;`, coma decimal, BOM para que Excel lo abra bien).
+- **Sin datos para probar todavía:** `earnings_hist` recién empezó a llenarse el 07/09, así que hoy la tabla va a aparecer vacía o con muy poco cargado — no es un bug, es que la colección todavía no acumuló earnings reportados. Se completa sola visitando el tab Earnings de vez en cuando (sin requests extra a Finnhub, usa el fetch normal del tab).
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 4ta) — Limpieza fila 32 del Excel — CERRADA, ya en tu Mac
+
+Fila 32 de la hoja DASHBOARD (`tracker_bitacora_traiding__DEFINITIVO.xlsx`) era scaffolding huérfano: 3 fórmulas (SUMIF/COUNTIF/COUNTIFS) apuntando a "RUSSELL 2000" -- activo que nunca se ejecutó (quedó como análisis en Notion) -- sin tabla ni encabezado alrededor, siempre en 0. A pedido de Pedro se borró el contenido de B32/E32/G32/I32 (no se borró la fila entera, para no correr el riesgo de desalinear otras fórmulas del sheet que referencian rangos como V5:V104). Recalculado con LibreOffice: 514 fórmulas, 0 errores. Ya escrito directo en el archivo de la Mac de Pedro -- no requiere commit ni push (el Excel no está versionado en git).
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 5ta) — Embed del dashboard en Notion — CERRADA
+
+Agregada sección "🖥️ Trading Desk — Dashboard en vivo" en la página Notion "📒 Bitácora Trading 2026" (la que ya decía "complementa el Excel Trading Desk"), justo debajo de la intro y antes de "Cómo usar esta bitácora". Es un bloque `<embed>` apuntando a `https://pedritozar.github.io/trading-desk/` — el fetch de la API lo devuelve como bloque embed real, no como link plano, así que se guardó bien. **Sin verificar visualmente todavía:** GitHub Pages no manda `X-Frame-Options` por default así que debería dejarse iframear sin problema, pero confirmá abriendo la página en Notion que el dashboard carga adentro y no una pantalla en blanco/error de CSP.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 6ta) — Cache de Mercado (Currency Strength/Commodities) — CERRADA, commit local sin pushear
+
+Pedro reportó (con capturas) que el tab Mercado tarda en mostrar números, más al refrescar. Causa raíz: Twelve Data Basic tiene 8 créditos/min y el tab pide 15 símbolos (10 forex + 5 commodities) -- la cola global de rate-limit los trocea en tandas de 5 y las va espaciando, así que un fetch en frío puede tardar hasta ~2min en completar todas las tandas. Sin cache, cada F5 volvía a "Cargando..." desde cero por ese rato.
+
+Fix (`7b77dff`): `restoreMercadoCache()` pinta los últimos precios conocidos (guardados en localStorage en cada fetch exitoso) apenas se abre el tab, mientras el fetch fresco corre atrás y los reemplaza solo cuando termina. Muestra "(caché, actualizando…)" en la hora de última actualización mientras tanto. No cambia la lógica de fetch ni el rate-limit en sí -- sigue tardando lo mismo en traer datos nuevos, pero ya no se ve la pantalla en blanco en cada refresh.
+
+*Cerrado: 2026-09-08, sesión Cowork (Claude Sonnet 5).*
+
+---
+
+## Sesión 2026-09-08 (Cowork, 7ma) — Fix real de los HTTP 429 en Mercado — CERRADA, commit local sin pushear
+
+Pedro probó el fix de cache de la sesión anterior en la URL en vivo (`https://pedritozar.github.io/trading-desk/`) y siguió viendo demora; al refrescar (con el botón de recargar del navegador, no F5 porque su F5 tiene atado el dictado por teclado) vio **HTTP 429 real** en Currency Strength y Commodities ("No se pudo cargar — reintentando en unos segundos…"), y recuperó varios minutos después.
+
+**Causa raíz encontrada:** la ventana de rate-limit (`twelveDataWindowStart`/`twelveDataCreditsUsed`) vivía solo en variables JS, reseteada a 0 en cada carga de página. Twelve Data cuenta los créditos en SU servidor, sin importarle que el navegador haya recargado — así que refrescar a mitad de una tanda hacía que el dashboard "creyera" tener el presupuesto completo (7 créditos) disponible de nuevo y disparara pedidos frescos que se sumaban a los ya consumidos en la ventana real, superando el límite real de Twelve Data (8 créditos/60s) y devolviendo 429.
+
+**Fix (commit local, sin pushear todavía):** la ventana ahora se persiste en `localStorage` (`pei_td_window`, `{start, used}`). Al cargar la página, si la ventana guardada sigue vigente (menos de 65s desde que arrancó), se retoma con los créditos ya gastados en vez de asumir presupuesto lleno — así un refresh a mitad de carga espera lo que falta de la ventana real en lugar de gatillar un pedido de más que rebota en 429. No cambia el presupuesto (7/65s) ni la lógica de troceo — solo hace que sobreviva a un F5.
+
+**Nota aparte, no resuelto en esta sesión — riesgo de fondo:** el dashboard usa una API key de Twelve Data hardcodeada y compartida (`TWELVE_DATA_KEY_DEFAULT`, visible en texto plano en el repo público de GitHub) como default cuando el campo de Config está vacío. Esa key comparte el mismo balde de 8 créditos/60s con **cualquiera** que la use — otro visitante del repo, un bot que lo scrapee, o el propio Pedro probando desde dos pestañas/dispositivos a la vez. Esto agrava (no reemplaza) la causa del 429 de arriba. Recomendación: que Pedro saque su propia API key gratis en twelvedata.com y la cargue en el campo "API key de Twelve Data" de ⚙ Config del dashboard — dos minutos, y deja de compartir balde con terceros. No implementado porque requiere que Pedro genere su propia key.
+
+**Dos bugs viejos, separados, todavía sin diagnosticar — necesitan que Pedro pruebe una URL en su navegador porque no hay red de mi lado para probarlas yo:**
+1. **Commodities siempre en 0,00 (WTI/BRENT/COPPER/NATGAS)** — solo Oro (XAU/USD) trae precio real. Hipótesis: esos símbolos de futuros/commodities puede que no estén incluidos en el plan Basic (gratis) de Twelve Data, o necesiten otro formato de símbolo. Pedro: abrí en el navegador `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` y pasame qué devuelve (¿precios reales, o un error tipo "symbol not found"/plan pago?).
+2. **RVOL siempre en 0.0x (SPY/QQQ/XAU) o "sin datos" (WTI)** — hipótesis: el plan gratis de Twelve Data no incluye volumen real en `time_series` para estos símbolos (volumen en 0 en todas las barras), y el cálculo de RVOL depende 100% de eso. Pedro: abrí `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` y fijate si el campo `"volume"` de cada barra viene con números reales o en `"0"`.
+
+*Cerrado (parcial): 2026-09-08, sesión Cowork (Claude Sonnet 5). El fix de 429 quedó cerrado; los dos bugs de arriba quedan abiertos en Pendientes hasta que Pedro reporte los resultados de las URLs.*
+
+---
+
 ---
 
 *Este archivo se creó el 2026-09-08, junto con la poda del CHANGELOG principal (commit `9dbb8ea`). A partir de acá, toda poda futura agrega su propia sección "## Poda YYYY-MM-DD" arriba de esta línea (o abajo, según convenga cronológicamente) — nunca se borra nada de lo ya escrito.*
