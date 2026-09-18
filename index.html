@@ -856,6 +856,7 @@ body {
 
     <!-- Consistencia del gestor: banner racha/ausencia + bitácora de análisis -->
     <div class="card" id="banner-consistencia" style="margin-bottom:16px;border-left:3px solid var(--border);display:none"></div>
+    <div class="card" id="banner-triple-witching" style="margin-bottom:16px;border-left:3px solid var(--border);display:none"></div>
     <div class="card" style="margin-bottom:16px">
       <div class="card-title">
         <span>Bitácora de análisis</span>
@@ -2045,7 +2046,7 @@ function renderAll() {
     renderKPIs, renderEquity, renderTrades, renderActivoBars, renderSistema,
     renderCalendar, renderDistribucion, renderMetricas, renderMetaCuenta,
     renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS,
-    archivarMesesCerrados, renderBannerConsistencia
+    archivarMesesCerrados, renderBannerConsistencia, renderBannerTripleWitching
   ];
   for (const fn of pasos) {
     try { fn(); } catch (e) { console.error(`renderAll: fallo ${fn.name}`, e); }
@@ -3292,6 +3293,69 @@ function leerPoolMensajes(key) {
   try {
     return (localStorage.getItem(key) || '').split('\n').map(s => s.trim()).filter(Boolean);
   } catch (e) { return []; }
+}
+
+// ═════════════════════════════════════
+// TRIPLE WITCHING — aviso liviano, sin API ni historial (Claude — 18/09 3ra sesión)
+// Pedido de Pedro tras ver una noticia sobre el vencimiento trimestral de hoy: "estar
+// atento" sin la rigurosidad de Commodities/Bonos -- es una fecha 100% calculable (tercer
+// viernes de marzo/junio/septiembre/diciembre, cuando vencen a la vez opciones sobre
+// acciones, futuros de índices y opciones de índices), así que no hace falta fetch,
+// localStorage ni cache: se recalcula en cada render.
+// Research (WebSearch, 18/09): en 2021 el volumen promedio del S&P 500 casi se duplicó
+// esos días y el rango intradía se expandió ~7% -- es mecánica de rebalanceo forzado de
+// posiciones que vencen, no una señal direccional.
+// ═══════════════════════════════════════
+const TRIPLE_WITCHING_AVISO_DIAS = 3; // desde cuántos días antes empieza a destacarse
+
+function tercerViernes(year, month) {
+  const d = new Date(year, month, 1);
+  const diasHastaViernes = (5 - d.getDay() + 7) % 7;
+  const primerViernes = 1 + diasHastaViernes;
+  return new Date(year, month, primerViernes + 14);
+}
+
+function proximoTripleWitching(desde) {
+  const meses = [2, 5, 8, 11]; // marzo, junio, septiembre, diciembre (0-indexed)
+  const hoy = desde || new Date();
+  const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const candidatos = [];
+  for (let yOffset = 0; yOffset <= 1; yOffset++) {
+    for (const m of meses) candidatos.push(tercerViernes(hoy.getFullYear() + yOffset, m));
+  }
+  return candidatos
+    .filter(d => d.getTime() >= hoySinHora.getTime())
+    .sort((a, b) => a - b)[0];
+}
+
+function renderBannerTripleWitching() {
+  const cont = document.getElementById('banner-triple-witching');
+  if (!cont) return;
+
+  const hoy = new Date();
+  const hoySinHora = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate());
+  const proxima = proximoTripleWitching(hoySinHora);
+  if (!proxima) { cont.style.display = 'none'; return; }
+
+  const diffDias = Math.round((proxima.getTime() - hoySinHora.getTime()) / 86400000);
+  const fechaFmt = proxima.toLocaleDateString('es-AR');
+
+  cont.style.display = 'block';
+
+  if (diffDias === 0) {
+    cont.style.borderColor = 'var(--red)';
+    cont.innerHTML = `
+      <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">⚠ Hoy es triple witching</div>
+      <div style="font-size:12px;color:var(--text-primary)">Vencimiento trimestral de opciones sobre acciones + futuros y opciones de índices. Esperable más volumen y rango intradía más ancho -- no es señal direccional, es rebalanceo forzado de posiciones que vencen.</div>`;
+  } else if (diffDias > 0 && diffDias <= TRIPLE_WITCHING_AVISO_DIAS) {
+    cont.style.borderColor = 'var(--yellow)';
+    cont.innerHTML = `
+      <div style="font-size:9px;color:var(--yellow);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Triple witching en ${diffDias} día${diffDias === 1 ? '' : 's'} (${fechaFmt})</div>
+      <div style="font-size:11px;color:var(--text-muted)">Vencimiento trimestral de derivados -- esperable más volumen y volatilidad esos días.</div>`;
+  } else {
+    cont.style.borderColor = 'var(--border)';
+    cont.innerHTML = `<div style="font-size:10px;color:var(--text-muted)">Próximo triple witching: ${fechaFmt}</div>`;
+  }
 }
 
 function renderBannerConsistencia() {
