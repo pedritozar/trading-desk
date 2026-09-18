@@ -186,7 +186,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 2 commits locales sin pushear: el de `check_folder.sh` (14/09) si no se pusheó todavía, y el de la tab Commodities + ALLOWED_DIRS/.gitignore (18/09) -- ver Pendientes 🔴.
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 8 commits locales sin pushear (Commodities, Bonos, mini-gráficos, Triple Witching y sus CHANGELOGs) -- lista completa en Pendientes 🔴.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
