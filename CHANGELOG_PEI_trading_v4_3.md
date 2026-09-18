@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-14 (sesión Cowork — feature Riesgo Rolling; feature Consistencia del gestor; poda: 7 sesiones del 08/09 comprimidas al historial; control general de carpeta)
+**Última actualización:** 2026-09-18 (sesión Cowork — feature Commodities Chicago/CBOT + skill de recomendación de nivel de modelo + 2do hallazgo de carpeta ajena mezclada)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,6 +42,22 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 ### 4. No depender de globals implícitos en un handler (`event`, etc.)
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
+
+---
+
+## Sesión 2026-09-18 (Cowork) — Feature Commodities Chicago/CBOT + skill de recomendación de modelo — CERRADA, commit local sin pushear
+
+Pedro pidió dos cosas en paralelo: (1) una skill de Claude que sugiera subir de nivel "Medio" a "Alto" solo cuando la tarea sea grande/compleja (avisando el consumo extra de tokens, nunca cambiando el nivel por su cuenta) -- se armó y quedó propuesta para que Pedro la guarde, no toca este repo. (2) Sumar a las sesiones habituales un seguimiento de commodities de Chicago (CBOT/CME/COMEX): trigo, arroz, carnes, petróleo, gas, oro, y a pedido de Pedro también maíz, plata, cobre y acero.
+
+**Research antes de construir:** Twelve Data (ya usado en el dashboard) no cubre bien commodities agrícolas en el plan free -- es la misma limitación de fondo del pendiente 🟡 "Commodities en 0,00" (WTI/BRENT/COPPER/NATGAS). Yahoo Finance sí tiene tickers de futuros estándar para todo el set pedido, y el proxy CORS que Pedro ya deployó para Índices (`pei-cors-proxy.pzacarias18.workers.dev`) sirve igual acá sin trabajo extra.
+
+**Decisiones confirmadas con Pedro antes de tocar código:** tab nueva "Commodities" (no mezclar con Mercado, que es de refresco diario) · cadencia semanal, no diaria · lista final: trigo (`ZW=F`), arroz (`ZR=F`), maíz (`ZC=F`), ganado (`LE=F`), cerdo (`HE=F`), petróleo WTI (`CL=F`), gas natural (`NG=F`), oro (`GC=F`), plata (`SI=F`), cobre (`HG=F`), acero HRC Midwest (`HRC=F`).
+
+**Implementado:** tab "Commodities" nueva, con `fetchYahoo()` (ya existente, reusado tal cual) para los 11 símbolos. Cache en localStorage (`pei_commodities_cache`) con timestamp -- si pasaron menos de 7 días desde el último fetch, se muestra el dato guardado sin pegarle de nuevo a la API; botón "↻ Actualizar ahora" fuerza el refresh salteando el gate. La "Var. semana" que se muestra compara contra el snapshot anterior guardado (no el % diario que devuelve Yahoo) -- disclaimer visible en el dashboard. Primera carga de cada commodity no tiene comparación todavía (muestra "—"). Es una tab lazy-loaded igual que Índices/Earnings/Histórico (no entra al pipeline de `renderAll()`), así que no aplica la Lección #1 (TDZ) ni la #2 (try/catch) -- mismo patrón ya usado y seguro. `node --check` OK en los 2 bloques `<script>` del archivo. `index.html` sincronizado.
+
+**Segundo hallazgo de carpeta ajena mezclada (mismo patrón que el 14/09):** `check_folder.sh` encontró la carpeta `ZAR vanguard` (proyecto Fondo de Emergencia, con su propio `.git`, archivos del 14 al 17/09 -- otra sesión de Cowork la había escrito ahí por error) suelta dentro de `trading-desk/`. Consultado con Pedro: decidió dejarla ahí a propósito en vez de moverla. Se sumó `"ZAR vanguard"` a `ALLOWED_DIRS` de `check_folder.sh` (con comentario de por qué) y se agregó `ZAR vanguard/` a `.gitignore` (tiene su propio `.git` anidado, no se trackea desde acá). `check_folder.sh` vuelve a dar ✅ OK.
+
+*Cerrado: 2026-09-18, sesión Cowork (Claude Sonnet 5).*
 
 ---
 
@@ -120,7 +136,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` (fix 429, Rolling Sharpe/Volatilidad, Consistencia del gestor, fix CORS Yahoo + HSTECH, todos pusheados 14/09). Queda 1 commit local sin pushear: fix del badge ESTÁTICO/CERRADO (ver Pendientes 🔴).
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 2 commits locales sin pushear: el de `check_folder.sh` (14/09) si no se pusheó todavía, y el de la tab Commodities + ALLOWED_DIRS/.gitignore (18/09) -- ver Pendientes 🔴.
+- ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, cache semanal en localStorage (ver sesión 18/09 para el detalle).
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
 - ✅ Métricas: Rachas, Drawdown (formato R+%+aviso muestra chica), TESLA/MALETA, Prop Firm, Kelly, Sesgo por Activo, Resumen Mensual/Anual — cada bloque aislado en su propio try/catch (Lección #2)
@@ -144,6 +161,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
+- [ ] **Pushear commit local `19ebbc2`** (18/09): tab Commodities + `check_folder.sh` con `ZAR vanguard` en whitelist + `.gitignore`. Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van los dos juntos.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
