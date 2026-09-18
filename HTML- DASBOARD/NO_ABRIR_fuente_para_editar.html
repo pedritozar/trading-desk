@@ -830,6 +830,7 @@ body {
   <button class="nav-btn" onclick="showTab('mercado', this); if(!mercadoInterval) initMercadoTab();">Mercado</button>
   <button class="nav-btn" onclick="showTab('indices', this); if(!indicesLoaded) initIndicesTab();">Índices</button>
   <button class="nav-btn" onclick="showTab('commodities', this); if(!commoditiesLoaded) initCommoditiesTab();">Commodities</button>
+  <button class="nav-btn" onclick="showTab('bonos', this); if(!bonosLoaded) initBonosTab();">Bonos</button>
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
   <button class="nav-btn" onclick="showTab('historico', this); if(!historicoLoaded) initHistoricoTab();">Histórico</button>
   <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
@@ -1305,6 +1306,22 @@ body {
       </span>
     </div>
     <div class="rotacion-disclaimer">La "Var. semana" compara contra el precio guardado en la última actualización (no es el % diario de Yahoo) — pensado para un vistazo semanal, no para trading intradía de estos futuros. Primera vez que se carga cada commodity no hay comparación todavía (muestra "—").</div>
+  </div>
+
+  <!-- ══ BONOS TAB (US Treasuries — CME Group) ══ -->
+  <div id="tab-bonos" class="tab-content">
+    <div class="section-title">Bonos — US Treasuries (CME Group) — Var. día y semana</div>
+    <div class="idx-grid" id="bonos-grid">
+      <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace;padding:40px 0">Cargando bonos…</div>
+    </div>
+    <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">
+      <span>Fuente: Yahoo Finance (vía proxy CORS) · fetch diario, se guarda 1 snapshot por día para poder calcular la variación semanal</span>
+      <span style="display:flex;gap:10px;align-items:center">
+        <span id="bonos-last-update">—</span>
+        <button onclick="refreshBonos(true)" style="font-size:9px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer">↻ Actualizar ahora</button>
+      </span>
+    </div>
+    <div class="rotacion-disclaimer">Cobertura solo EE.UU. por ahora (2Y/5Y/10Y/30Y, futuros CME + índices de yield) — Bund alemán, Gilt UK y JGB japonés quedaron afuera: Yahoo Finance no tiene un ticker limpio y confiable para esos tres (Gilt no tiene ticker directo; Bund/JGB solo existen como índices de retorno total de Deutsche Bank, otra escala y otra lectura). Si en algún momento aparece una fuente mejor, se suman. "Var. día" es el % diario que devuelve Yahoo; "Var. semana" compara contra el snapshot guardado hace ~5 días hábiles (necesita algunos días de historial acumulado — al principio va a mostrar "—").</div>
   </div>
 
   <!-- ══ EARNINGS TAB ══ -->
@@ -4544,6 +4561,7 @@ const STATIC_PRICES = {
 
 let indicesLoaded = false;
 let commoditiesLoaded = false;
+let bonosLoaded = false;
 let historicoLoaded = false;
 let historicoData = null;
 
@@ -4959,6 +4977,165 @@ async function initCommoditiesTab() {
   if (commoditiesLoaded) return;
   commoditiesLoaded = true;
   await refreshCommodities(false);
+}
+
+// ══════════════════════════════════════
+// BONOS — US Treasuries vía CME Group (Claude — 2026-09-18)
+// Pedido de Pedro (cuenta en CMT Group): vistazo de día y semana de los
+// T-bonds. Investigado: Yahoo tiene tickers confiables para futuros CME
+// (ZT/ZF/ZN/ZB) y para los índices de yield (^FVX/^TNX/^TYX) -- confirmado
+// con WebSearch antes de escribir esto. Bund/Gilt/JGB quedaron afuera
+// (decisión con Pedro, 18/09): Yahoo no tiene ticker limpio para Gilt, y
+// Bund/JGB solo existen como índices de retorno total (^BUNL/^JGBL), otra
+// escala -- se dejan para cuando haya una fuente mejor.
+// Cadencia diaria (a diferencia de Commodities, que es semanal): cada vez
+// que se abre la tab se guarda 1 snapshot por día (dedup por fecha, no
+// pega a la API más de una vez por día aunque se reabra el dashboard).
+// "Var. día" = el % diario que ya devuelve fetchYahoo(). "Var. semana" se
+// calcula acá comparando contra el snapshot más viejo disponible que tenga
+// al menos 5 días de antigüedad (necesita historial acumulado).
+// ══════════════════════════════════════
+const BONOS_CONFIG = [
+  { id:'us2y',  name:'2Y T-Note Futures',  flag:'🇺🇸', ticker:'ZT=F',  kind:'futuro', unit:'pts' },
+  { id:'us5y',  name:'5Y T-Note Futures',  flag:'🇺🇸', ticker:'ZF=F',  kind:'futuro', unit:'pts' },
+  { id:'us10y', name:'10Y T-Note Futures', flag:'🇺🇸', ticker:'ZN=F',  kind:'futuro', unit:'pts' },
+  { id:'us30y', name:'30Y T-Bond Futures', flag:'🇺🇸', ticker:'ZB=F',  kind:'futuro', unit:'pts' },
+  { id:'y5',    name:'Yield 5Y',           flag:'📈', ticker:'^FVX',  kind:'yield',  unit:'%' },
+  { id:'y10',   name:'Yield 10Y',          flag:'📈', ticker:'^TNX',  kind:'yield',  unit:'%' },
+  { id:'y30',   name:'Yield 30Y',          flag:'📈', ticker:'^TYX',  kind:'yield',  unit:'%' },
+];
+
+const BONOS_HISTORY_KEY = 'pei_bonos_history';
+const BONOS_HISTORY_MAX = 14; // ~2 semanas de snapshots diarios
+const BONOS_SEMANA_MIN_DIAS = 5;
+
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function loadBonosHistory() {
+  try {
+    const raw = localStorage.getItem(BONOS_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { console.warn('Bonos history: error leyendo localStorage', e); return []; }
+}
+
+function saveBonosHistory(history) {
+  try { localStorage.setItem(BONOS_HISTORY_KEY, JSON.stringify(history)); }
+  catch(e) { console.warn('Bonos history: error guardando localStorage', e); }
+}
+
+function buildBonoCard(cfg, current, changeSemana) {
+  const hasData = current && typeof current.price === 'number';
+  const price = hasData ? current.price : null;
+  const status = hasData ? (current.status || 'closed') : 'static';
+
+  const changeDia = hasData && typeof current.change === 'number' ? current.change : null;
+  const fmtPct = v => v === null ? '—' : `${v > 0 ? '+' : ''}${v.toFixed(2)}%`;
+  const claseDia = changeDia === null ? 'flat' : changeDia > 0 ? 'up' : changeDia < 0 ? 'down' : 'flat';
+  const claseSemana = changeSemana === null ? 'flat' : changeSemana > 0 ? 'up' : changeSemana < 0 ? 'down' : 'flat';
+
+  const priceStr = hasData
+    ? price.toLocaleString('es-AR', {minimumFractionDigits: cfg.kind === 'yield' ? 3 : 2, maximumFractionDigits: cfg.kind === 'yield' ? 3 : 2})
+    : '—';
+
+  return `<div class="idx-card">
+    <div class="idx-header">
+      <div>
+        <div class="idx-name">${cfg.flag} ${cfg.name}</div>
+        <div class="idx-ticker">${cfg.ticker} · ${cfg.unit}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="idx-price">${priceStr}</div>
+      </div>
+    </div>
+    <div class="idx-stats" style="grid-template-columns:1fr 1fr">
+      <div>
+        <div class="idx-stat-label">Var. día</div>
+        <div class="idx-stat-value ${claseDia}" style="color:${claseDia==='up'?'var(--green)':claseDia==='down'?'var(--red)':'var(--text-muted)'}">${fmtPct(changeDia)}</div>
+      </div>
+      <div>
+        <div class="idx-stat-label">Var. semana</div>
+        <div class="idx-stat-value ${claseSemana}" style="color:${claseSemana==='up'?'var(--green)':claseSemana==='down'?'var(--red)':'var(--text-muted)'}">${fmtPct(changeSemana)}</div>
+      </div>
+    </div>
+    <div class="idx-status-row">
+      <span class="idx-source">Fuente: Yahoo Finance${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
+      <span class="idx-badge ${status}">${status === 'live' ? 'LIVE' : status === 'closed' ? 'CERRADO' : 'SIN DATOS'}</span>
+    </div>
+  </div>`;
+}
+
+function calcularChangeSemana(history, id) {
+  if (!history || history.length < 2) return null;
+  const hoy = history[history.length - 1];
+  const precioHoy = hoy?.data?.[id]?.price;
+  if (typeof precioHoy !== 'number') return null;
+
+  const msPorDia = 86400000;
+  const hoyMs = new Date(hoy.date).getTime();
+
+  // Buscar, de más viejo a más nuevo, el primer snapshot con >= BONOS_SEMANA_MIN_DIAS de antigüedad
+  for (let i = 0; i < history.length - 1; i++) {
+    const entry = history[i];
+    const dias = Math.round((hoyMs - new Date(entry.date).getTime()) / msPorDia);
+    if (dias >= BONOS_SEMANA_MIN_DIAS) {
+      const precioViejo = entry?.data?.[id]?.price;
+      if (typeof precioViejo === 'number' && precioViejo !== 0) {
+        return (precioHoy - precioViejo) / precioViejo * 100;
+      }
+    }
+  }
+  return null; // no hay historial de al menos BONOS_SEMANA_MIN_DIAS días todavía
+}
+
+function renderBonosGrid(history) {
+  const grid = document.getElementById('bonos-grid');
+  if (!grid) return;
+  const ultimo = history[history.length - 1];
+  const data = ultimo?.data || {};
+
+  grid.innerHTML = BONOS_CONFIG.map(cfg =>
+    buildBonoCard(cfg, data[cfg.id], calcularChangeSemana(history, cfg.id))
+  ).join('');
+
+  const elUpdate = document.getElementById('bonos-last-update');
+  if (elUpdate) elUpdate.textContent = ultimo ? `Actualizado: ${ultimo.date}` : '—';
+}
+
+async function refreshBonos(force) {
+  let history = loadBonosHistory();
+  const hoy = hoyISO();
+  const yaHoy = history.length && history[history.length - 1].date === hoy;
+
+  if (!force && yaHoy) {
+    renderBonosGrid(history);
+    return;
+  }
+
+  if (history.length) renderBonosGrid(history); // mostrar lo último mientras refresca
+
+  const results = {};
+  await Promise.all(BONOS_CONFIG.map(async cfg => {
+    results[cfg.id] = await fetchYahoo(cfg.ticker);
+  }));
+
+  if (yaHoy) {
+    // Actualizar el snapshot de hoy en vez de duplicar la fecha (caso "Actualizar ahora" el mismo día)
+    history[history.length - 1] = { date: hoy, data: results };
+  } else {
+    history.push({ date: hoy, data: results });
+  }
+  if (history.length > BONOS_HISTORY_MAX) history = history.slice(-BONOS_HISTORY_MAX);
+
+  saveBonosHistory(history);
+  renderBonosGrid(history);
+}
+
+async function initBonosTab() {
+  if (bonosLoaded) return;
+  bonosLoaded = true;
+  await refreshBonos(false);
 }
 
 // Init calendar on load
