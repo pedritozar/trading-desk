@@ -1305,7 +1305,7 @@ body {
         <button onclick="refreshCommodities(true)" style="font-size:9px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer">↻ Actualizar ahora</button>
       </span>
     </div>
-    <div class="rotacion-disclaimer">La "Var. semana" compara contra el precio guardado en la última actualización (no es el % diario de Yahoo) — pensado para un vistazo semanal, no para trading intradía de estos futuros. Primera vez que se carga cada commodity no hay comparación todavía (muestra "—").</div>
+    <div class="rotacion-disclaimer">La "Var. semana" compara contra el precio guardado en la última actualización (no es el % diario de Yahoo) — pensado para un vistazo semanal, no para trading intradía de estos futuros. Primera vez que se carga cada commodity no hay comparación todavía (muestra "—"). El mini gráfico de abajo muestra la evolución de las últimas ~12 semanas guardadas (fix 18/09 2da) — cambiamos la forma de guardar el historial, así que arranca vacío y se va llenando semana a semana desde ahora.</div>
   </div>
 
   <!-- ══ BONOS TAB (US Treasuries — CME Group) ══ -->
@@ -1321,7 +1321,7 @@ body {
         <button onclick="refreshBonos(true)" style="font-size:9px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer">↻ Actualizar ahora</button>
       </span>
     </div>
-    <div class="rotacion-disclaimer">Cobertura solo EE.UU. por ahora (2Y/5Y/10Y/30Y, futuros CME + índices de yield) — Bund alemán, Gilt UK y JGB japonés quedaron afuera: Yahoo Finance no tiene un ticker limpio y confiable para esos tres (Gilt no tiene ticker directo; Bund/JGB solo existen como índices de retorno total de Deutsche Bank, otra escala y otra lectura). Si en algún momento aparece una fuente mejor, se suman. "Var. día" es el % diario que devuelve Yahoo; "Var. semana" compara contra el snapshot guardado hace ~5 días hábiles (necesita algunos días de historial acumulado — al principio va a mostrar "—").</div>
+    <div class="rotacion-disclaimer">Cobertura solo EE.UU. por ahora (2Y/5Y/10Y/30Y, futuros CME + índices de yield) — Bund alemán, Gilt UK y JGB japonés quedaron afuera: Yahoo Finance no tiene un ticker limpio y confiable para esos tres (Gilt no tiene ticker directo; Bund/JGB solo existen como índices de retorno total de Deutsche Bank, otra escala y otra lectura). Si en algún momento aparece una fuente mejor, se suman. "Var. día" es el % diario que devuelve Yahoo; "Var. semana" compara contra el snapshot guardado hace ~5 días hábiles (necesita algunos días de historial acumulado — al principio va a mostrar "—"). El mini gráfico de abajo muestra la evolución de los últimos ~30 días guardados (ampliado de 14 a 30, fix 18/09 2da).</div>
   </div>
 
   <!-- ══ EARNINGS TAB ══ -->
@@ -4860,6 +4860,27 @@ function renderRotacionMercados(updated) {
 // último fetch, se muestra el dato guardado sin pegarle a la API de nuevo.
 // El botón "Actualizar ahora" fuerza el refresh ignorando el gate de 7 días.
 // ══════════════════════════════════════
+// Helpers compartidos para mini-gráficos de Commodities y Bonos (Claude — 18/09 2da).
+// Reusan renderSVGCurve() (ya usada en Índices) convirtiendo la serie de precios en
+// retornos punto-a-punto -- así el mini gráfico sale con el mismo estilo visual
+// (área + línea + % acumulado) sin duplicar código de SVG.
+function historyToReturns(history, id) {
+  const pts = (history || [])
+    .map(h => ({ date: h.date, price: h.data?.[id]?.price }))
+    .filter(p => typeof p.price === 'number');
+  if (pts.length < 2) return null;
+  return pts.map((p, i) => ({
+    ret: i === 0 ? 0 : (p.price - pts[i - 1].price) / pts[i - 1].price * 100,
+    mes: fmtShortDate(p.date),
+  }));
+}
+
+function fmtShortDate(iso) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+}
+
 const COMMODITIES_CONFIG = [
   { id:'trigo',  name:'Trigo (Wheat)',        flag:'🌾', ticker:'ZW=F',  unit:'USd/bushel' },
   { id:'arroz',  name:'Arroz (Rough Rice)',   flag:'🍚', ticker:'ZR=F',  unit:'USD/cwt' },
@@ -4874,22 +4895,23 @@ const COMMODITIES_CONFIG = [
   { id:'acero',  name:'Acero HRC (Midwest)',  flag:'⚙️', ticker:'HRC=F', unit:'USD/ton' },
 ];
 
-const COMMODITIES_CACHE_KEY = 'pei_commodities_cache';
+const COMMODITIES_HISTORY_KEY = 'pei_commodities_history';
 const COMMODITIES_REFRESH_DAYS = 7;
+const COMMODITIES_HISTORY_MAX = 12; // ~12 semanas de snapshots -- alcanza para el mini gráfico (fix 18/09 2da)
 
-function loadCommoditiesCache() {
+function loadCommoditiesHistory() {
   try {
-    const raw = localStorage.getItem(COMMODITIES_CACHE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch(e) { console.warn('Commodities cache: error leyendo localStorage', e); return null; }
+    const raw = localStorage.getItem(COMMODITIES_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch(e) { console.warn('Commodities history: error leyendo localStorage', e); return []; }
 }
 
-function saveCommoditiesCache(cache) {
-  try { localStorage.setItem(COMMODITIES_CACHE_KEY, JSON.stringify(cache)); }
-  catch(e) { console.warn('Commodities cache: error guardando localStorage', e); }
+function saveCommoditiesHistory(history) {
+  try { localStorage.setItem(COMMODITIES_HISTORY_KEY, JSON.stringify(history)); }
+  catch(e) { console.warn('Commodities history: error guardando localStorage', e); }
 }
 
-function buildCommodityCard(cfg, current, prevPrice) {
+function buildCommodityCard(cfg, current, prevPrice, retSeries) {
   const hasData = current && typeof current.price === 'number';
   const price = hasData ? current.price : null;
   const status = hasData ? (current.status || 'closed') : 'static';
@@ -4917,6 +4939,10 @@ function buildCommodityCard(cfg, current, prevPrice) {
         <div class="idx-change ${changeClass}">${changeStr} semana</div>
       </div>
     </div>
+    <div class="idx-chart-wrap">
+      <div class="idx-chart-label">Evolución ~12 semanas</div>
+      ${retSeries ? renderSVGCurve(retSeries) : '<div style="color:var(--text-muted);font-size:10px">Acumulando historial (necesita 2+ semanas guardadas)</div>'}
+    </div>
     <div class="idx-status-row">
       <span class="idx-source">Fuente: Yahoo Finance${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
       <span class="idx-badge ${status}">${status === 'live' ? 'LIVE' : status === 'closed' ? 'CERRADO' : 'SIN DATOS'}</span>
@@ -4924,20 +4950,22 @@ function buildCommodityCard(cfg, current, prevPrice) {
   </div>`;
 }
 
-function renderCommoditiesGrid(cache) {
+function renderCommoditiesGrid(history) {
   const grid = document.getElementById('commodities-grid');
   if (!grid) return;
-  const data = cache?.data || {};
-  const prevData = cache?.prevData || {};
+  const ultimo = history[history.length - 1];
+  const data = ultimo?.data || {};
+  const prevData = history.length > 1 ? (history[history.length - 2].data || {}) : {};
+
   grid.innerHTML = COMMODITIES_CONFIG.map(cfg =>
-    buildCommodityCard(cfg, data[cfg.id], prevData[cfg.id]?.price)
+    buildCommodityCard(cfg, data[cfg.id], prevData[cfg.id]?.price, historyToReturns(history, cfg.id))
   ).join('');
 
   const elUpdate = document.getElementById('commodities-last-update');
   if (elUpdate) {
-    if (cache?.fetchedAt) {
-      const diasAtras = Math.floor((Date.now() - cache.fetchedAt) / 86400000);
-      elUpdate.textContent = diasAtras === 0
+    if (ultimo?.date) {
+      const diasAtras = Math.floor((Date.now() - new Date(ultimo.date).getTime()) / 86400000);
+      elUpdate.textContent = diasAtras <= 0
         ? 'Actualizado: hoy'
         : `Actualizado: hace ${diasAtras}d`;
     } else {
@@ -4947,30 +4975,35 @@ function renderCommoditiesGrid(cache) {
 }
 
 async function refreshCommodities(force) {
-  const cache = loadCommoditiesCache();
-  const ageMs = cache?.fetchedAt ? Date.now() - cache.fetchedAt : Infinity;
+  let history = loadCommoditiesHistory();
+  const ultimo = history[history.length - 1];
+  const ageMs = ultimo?.date ? Date.now() - new Date(ultimo.date).getTime() : Infinity;
   const staleMs = COMMODITIES_REFRESH_DAYS * 86400000;
 
-  if (!force && cache && ageMs < staleMs) {
-    renderCommoditiesGrid(cache);
+  if (!force && history.length && ageMs < staleMs) {
+    renderCommoditiesGrid(history);
     return;
   }
 
-  // Mostrar lo que haya en cache mientras se refresca, para no dejar la grilla vacía
-  if (cache) renderCommoditiesGrid(cache);
+  // Mostrar lo que haya en historial mientras se refresca, para no dejar la grilla vacía
+  if (history.length) renderCommoditiesGrid(history);
 
   const results = {};
   await Promise.all(COMMODITIES_CONFIG.map(async cfg => {
     results[cfg.id] = await fetchYahoo(cfg.ticker);
   }));
 
-  const newCache = {
-    fetchedAt: Date.now(),
-    data: results,
-    prevData: cache?.data || {},
-  };
-  saveCommoditiesCache(newCache);
-  renderCommoditiesGrid(newCache);
+  const hoy = hoyISO();
+  const yaHoy = history.length && history[history.length - 1].date === hoy;
+  if (yaHoy) {
+    history[history.length - 1] = { date: hoy, data: results };
+  } else {
+    history.push({ date: hoy, data: results });
+  }
+  if (history.length > COMMODITIES_HISTORY_MAX) history = history.slice(-COMMODITIES_HISTORY_MAX);
+
+  saveCommoditiesHistory(history);
+  renderCommoditiesGrid(history);
 }
 
 async function initCommoditiesTab() {
@@ -5006,7 +5039,7 @@ const BONOS_CONFIG = [
 ];
 
 const BONOS_HISTORY_KEY = 'pei_bonos_history';
-const BONOS_HISTORY_MAX = 14; // ~2 semanas de snapshots diarios
+const BONOS_HISTORY_MAX = 30; // ~1 mes de snapshots diarios -- alcanza para el mini gráfico (fix 18/09 2da)
 const BONOS_SEMANA_MIN_DIAS = 5;
 
 function hoyISO() {
@@ -5025,7 +5058,7 @@ function saveBonosHistory(history) {
   catch(e) { console.warn('Bonos history: error guardando localStorage', e); }
 }
 
-function buildBonoCard(cfg, current, changeSemana) {
+function buildBonoCard(cfg, current, changeSemana, retSeries) {
   const hasData = current && typeof current.price === 'number';
   const price = hasData ? current.price : null;
   const status = hasData ? (current.status || 'closed') : 'static';
@@ -5058,6 +5091,10 @@ function buildBonoCard(cfg, current, changeSemana) {
         <div class="idx-stat-label">Var. semana</div>
         <div class="idx-stat-value ${claseSemana}" style="color:${claseSemana==='up'?'var(--green)':claseSemana==='down'?'var(--red)':'var(--text-muted)'}">${fmtPct(changeSemana)}</div>
       </div>
+    </div>
+    <div class="idx-chart-wrap">
+      <div class="idx-chart-label">Evolución ~30 días</div>
+      ${retSeries ? renderSVGCurve(retSeries) : '<div style="color:var(--text-muted);font-size:10px">Acumulando historial (necesita 2+ días guardados)</div>'}
     </div>
     <div class="idx-status-row">
       <span class="idx-source">Fuente: Yahoo Finance${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
@@ -5096,7 +5133,7 @@ function renderBonosGrid(history) {
   const data = ultimo?.data || {};
 
   grid.innerHTML = BONOS_CONFIG.map(cfg =>
-    buildBonoCard(cfg, data[cfg.id], calcularChangeSemana(history, cfg.id))
+    buildBonoCard(cfg, data[cfg.id], calcularChangeSemana(history, cfg.id), historyToReturns(history, cfg.id))
   ).join('');
 
   const elUpdate = document.getElementById('bonos-last-update');
