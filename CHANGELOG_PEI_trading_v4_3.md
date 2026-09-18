@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-18 (sesión Cowork — feature Commodities Chicago/CBOT + skill de recomendación de nivel de modelo + 2do hallazgo de carpeta ajena mezclada)
+**Última actualización:** 2026-09-18 (sesión Cowork — feature Commodities Chicago/CBOT + feature Bonos US Treasuries + skill de recomendación de nivel de modelo + 2do hallazgo de carpeta ajena mezclada)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,6 +42,18 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 ### 4. No depender de globals implícitos en un handler (`event`, etc.)
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
+
+---
+
+## Sesión 2026-09-18 (Cowork, 2da) — Feature Bonos (US Treasuries, CME Group) — CERRADA, commit local sin pushear
+
+Pedro pidió un vistazo de día y semana de "T-bonds globales" (tiene cuenta en CME Group). Research antes de construir (WebSearch, no memoria): confirmado que Yahoo Finance tiene tickers reales para los futuros CME 2Y/5Y/10Y/30Y (`ZT=F`/`ZF=F`/`ZN=F`/`ZB=F`) y para los índices de yield 5Y/10Y/30Y (`^FVX`/`^TNX`/`^TYX`) -- páginas confirmadas en finance.yahoo.com. Para lo "global" del pedido (Bund alemán, Gilt UK, JGB japonés): Bund y JGB solo existen en Yahoo como índices de retorno total de Deutsche Bank (`^BUNL`/`^JGBL`) -- otra escala y otra lectura que el precio del futuro puro -- y Gilt no tiene ticker confiable en Yahoo (solo aparece en TradingView/Barchart, no habilitados acá). Presentado el research a Pedro: decidió arrancar solo con US Treasuries y dejar lo global pendiente de una fuente mejor.
+
+**Implementado:** tab "Bonos" nueva, con los 7 instrumentos de arriba vía `fetchYahoo()` (reusado tal cual, mismo proxy CORS). A diferencia de Commodities (cadencia semanal), acá la cadencia es diaria: cada apertura de la tab guarda 1 snapshot por día en `pei_bonos_history` (localStorage, hasta 14 días, dedup por fecha para no pegarle a la API más de una vez por día). "Var. día" es el `change` que ya devuelve Yahoo; "Var. semana" se calcula comparando contra el snapshot más viejo disponible con ≥5 días de antigüedad — necesita unos días de historial acumulado antes de mostrar algo (al principio da "—", esperado). Botón "Actualizar ahora" fuerza el refresh salteando el dedup diario. Misma tab lazy-loaded que Commodities/Índices, no toca `renderAll()`. `node --check` OK, `index.html` sincronizado.
+
+**Pendiente de research (anotado por Pedro en la sesión):** buscar una fuente de datos mejor para Bund alemán y JGB japonés (idealmente precio del futuro, no un índice derivado) y para Gilt UK, y sumar bonos soberanos de **Rusia** y **China** al tab Bonos cuando se encuentre fuente. Va a 🟡 Pendientes.
+
+*Cerrado: 2026-09-18, sesión Cowork (Claude Sonnet 5).*
 
 ---
 
@@ -138,6 +150,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 2 commits locales sin pushear: el de `check_folder.sh` (14/09) si no se pusheó todavía, y el de la tab Commodities + ALLOWED_DIRS/.gitignore (18/09) -- ver Pendientes 🔴.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, cache semanal en localStorage (ver sesión 18/09 para el detalle).
+- ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, snapshot diario en localStorage para var. día y semana (ver sesión 18/09, 2da).
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
 - ✅ Métricas: Rachas, Drawdown (formato R+%+aviso muestra chica), TESLA/MALETA, Prop Firm, Kelly, Sesgo por Activo, Resumen Mensual/Anual — cada bloque aislado en su propio try/catch (Lección #2)
@@ -161,13 +174,14 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
-- [ ] **Pushear commit local `19ebbc2`** (18/09): tab Commodities + `check_folder.sh` con `ZAR vanguard` en whitelist + `.gitignore`. Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van los dos juntos.
+- [ ] **Pushear commits locales `19ebbc2` y `d5f04af`** (18/09): tab Commodities + `check_folder.sh`/`.gitignore` (`19ebbc2`) y tab Bonos US Treasuries (`d5f04af`). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van los tres juntos.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
+- [ ] **Bonos globales (Bund, JGB, Gilt, Rusia, China)** — pedido explícito de Pedro (18/09). Bund/JGB en Yahoo son índices derivados (Deutsche Bank), no el precio del futuro; Gilt no tiene ticker confiable en Yahoo; Rusia/China sin research todavía. Buscar fuente alternativa (Twelve Data plan pago, Investing.com, TradingEconomics, o el broker/CME Group directo ya que Pedro tiene cuenta ahí) antes de sumarlos al tab Bonos.
 - [ ] **Commodities en 0,00 (WTI/BRENT/COPPER/NATGAS) y RVOL en 0.0x/sin datos** — hipótesis: límite del plan gratis de Twelve Data (símbolos de futuros y/o volumen real no incluidos en Basic). Pedro: probar en el navegador y reportar qué devuelven —
   1. `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿precios reales o error "symbol not found"/plan pago?)
   2. `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿el campo `"volume"` de cada barra viene con números reales o en `"0"`?)
