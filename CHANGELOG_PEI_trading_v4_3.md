@@ -175,8 +175,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Estado actual del dashboard
 
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 2 commits locales sin pushear: el de `check_folder.sh` (14/09) si no se pusheó todavía, y el de la tab Commodities + ALLOWED_DIRS/.gitignore (18/09) -- ver Pendientes 🔴.
-- ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, cache semanal en localStorage (ver sesión 18/09 para el detalle).
-- ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, snapshot diario en localStorage para var. día y semana (ver sesión 18/09, 2da).
+- ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
+- ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
 - ✅ Métricas: Rachas, Drawdown (formato R+%+aviso muestra chica), TESLA/MALETA, Prop Firm, Kelly, Sesgo por Activo, Resumen Mensual/Anual — cada bloque aislado en su propio try/catch (Lección #2)
@@ -200,7 +200,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
-- [ ] **Pushear commits locales `19ebbc2` y `d5f04af`** (18/09): tab Commodities + `check_folder.sh`/`.gitignore` (`19ebbc2`) y tab Bonos US Treasuries (`d5f04af`). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van los tres juntos.
+- [ ] **Pushear commits locales** (18/09): `19ebbc2` (tab Commodities + `check_folder.sh`/`.gitignore`), `96bf491` (CHANGELOG Commodities), `d5f04af` (tab Bonos US Treasuries), `3797fc9` (CHANGELOG Bonos), `a5b72bc` (mini-gráficos Commodities/Bonos), `bd90c9b` (CHANGELOG mini-gráficos). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van todos juntos.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
