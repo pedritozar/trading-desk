@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-18 (sesión Cowork — feature Commodities Chicago/CBOT + feature Bonos US Treasuries + skill de recomendación de nivel de modelo + 2do hallazgo de carpeta ajena mezclada)
+**Última actualización:** 2026-09-18 (sesión Cowork, 3ra — mini-gráficos en Commodities/Bonos + validación de research de DeepSeek sobre bonos globales)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,6 +42,32 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 ### 4. No depender de globals implícitos en un handler (`event`, etc.)
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
+
+---
+
+## Sesión 2026-09-18 (Cowork, 3ra) — Mini-gráficos Commodities/Bonos + validación research DeepSeek (bonos globales) — CERRADA, commit local sin pushear
+
+Pedro le pasó a un chat de DeepSeek dedicado el resumen de research de la sesión anterior (bonos globales pendientes: Bund, Gilt, JGB, Rusia, China) para ampliar la búsqueda por su cuenta. Volvió con una propuesta concreta que Claude validó contra fuentes primarias antes de aceptar nada (nunca tomar un "✅" de otra IA como verificado):
+
+- **OFZ ruso vía MOEX ISS — confirmado, el más sólido de los tres.** Revisando el código real del dashboard: `fetchMOEX()` ya pega directo a `iss.moex.com` con `fetch()` sin pasar por el proxy CORS (funciona sin problema, a diferencia de Yahoo). El índice `RGBI`/`RGBITR` se puede sumar reusando ese mismo patrón.
+- **CGB chino vía Sina Finance — dato real, CORS sin confirmar.** El endpoint (`bond.finance.sina.com.cn/hq/gb/daily?symbol=CN10YT`) devuelve JSON real con series históricas de yield (probado con WebFetch). No se pudo confirmar si manda headers CORS para `fetch()` de browser -- tanto el sandbox de Claude como el Mac de Pedro bloquean `curl` directo por política de red. **Pendiente: Pedro prueba el fetch a mano en la consola de su navegador antes de integrarlo.**
+- **JGB japonés vía J-Quants — CORREGIDO un dato de DeepSeek.** DeepSeek dijo "free tier con 12 semanas de delay" para los futuros; la doc oficial de J-Quants dice otra cosa: el free tier **no incluye futuros/derivados en absoluto**, solo el plan Premium (pago) los tiene. Si se quiere JGB gratis, sería solo el yield (no el futuro) vía alguna fuente tipo Eulerpool -- sin confirmar todavía que cubra Japón/Alemania.
+- **Bund alemán y Gilt UK — sigue sin fuente gratuita viable.** Coincide con el research anterior, sin novedades.
+
+Decisión: no se integró ninguno de los tres todavía. Arranca en Pendientes, empezando por OFZ ruso (el único 100% verificado) en una próxima sesión.
+
+**Feature aparte, pedida por Pedro tras ver las tabs armadas:** mini-gráficos (evolución histórica) en las cards de Commodities y Bonos, mismo estilo visual que ya usa Índices (curva acumulada con área + línea + % total, `renderSVGCurve()`). Decisiones confirmadas antes de tocar código: Commodities pasa a acumular 12 semanas de historial (antes solo guardaba el snapshot actual + el anterior); Bonos amplía el cap de historial de 14 a 30 días; mismo estilo grande que Índices, no un sparkline chico.
+
+**Implementado:**
+- Helpers compartidos nuevos `historyToReturns()` / `fmtShortDate()`: convierten cualquier serie de precios guardada en el formato `{ret, mes}` que ya consume `renderSVGCurve()` -- cero código SVG nuevo, mismo look pixel-a-pixel que Índices.
+- Commodities: reemplazado el cache de "actual + anterior" (`pei_commodities_cache`) por un historial acumulativo (`pei_commodities_history`, hasta 12 snapshots semanales). **El cache viejo queda huérfano** (cambió la key de localStorage) -- el mini gráfico arranca vacío y se va llenando semana a semana desde esta sesión en adelante, avisado en el disclaimer del tab.
+- Bonos: `BONOS_HISTORY_MAX` subido de 14 a 30 (misma key `pei_bonos_history`, no se pierde lo ya guardado).
+- Ambas cards ahora tienen un `idx-chart-wrap` con la curva acumulada del historial disponible; mientras no haya al menos 2 puntos guardados muestra "Acumulando historial..." en vez de un gráfico vacío o roto.
+- `node --check` OK en los 3 bloques `<script>` del archivo. `index.html` sincronizado. `check_folder.sh` ✅ OK.
+
+**Devolución a Pedro sobre el desempeño de DeepSeek en esta tarea:** bien en general -- dijo "no hay nada" para Gilt en vez de forzar una alternativa mala, y trajo endpoints concretos, no solo nombres de fuente. Dos cosas a corregir en su research a futuro: (1) se equivocó en el límite del free tier de J-Quants (confundió el delay de datos de acciones con la restricción binaria de derivados); (2) presentó a Sina Finance con el mismo nivel de confianza "✅" que a MOEX, sin marcar que el CORS estaba sin probar -- convendría pedirle que distinga sistemáticamente "fuente verificada en vivo" de "endpoint que existe pero sin probar" en cada fila de sus tablas, no solo la primera vez que lo menciona.
+
+*Cerrado: 2026-09-18, sesión Cowork (Claude Sonnet 5).*
 
 ---
 
@@ -181,7 +207,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
-- [ ] **Bonos globales (Bund, JGB, Gilt, Rusia, China)** — pedido explícito de Pedro (18/09). Bund/JGB en Yahoo son índices derivados (Deutsche Bank), no el precio del futuro; Gilt no tiene ticker confiable en Yahoo; Rusia/China sin research todavía. Buscar fuente alternativa (Twelve Data plan pago, Investing.com, TradingEconomics, o el broker/CME Group directo ya que Pedro tiene cuenta ahí) antes de sumarlos al tab Bonos.
+- [ ] **Bonos globales (Bund, JGB, Gilt, Rusia, China)** — pedido explícito de Pedro (18/09). Research de DeepSeek validado (18/09, 3ra sesión): **OFZ ruso vía MOEX ISS — verificado, listo para integrar** (mismo patrón que `fetchMOEX()`, sin proxy CORS necesario). **CGB chino vía Sina Finance — dato real, falta confirmar CORS** (Pedro prueba el fetch a mano en su navegador antes de sumarlo). **JGB japonés vía J-Quants — el free tier NO incluye futuros** (solo Premium pago); si se quiere, sería solo el yield vía otra fuente sin confirmar cobertura todavía. **Bund y Gilt siguen sin fuente gratuita viable.** Próximo paso: integrar OFZ ruso primero (el único verificado al 100%).
 - [ ] **Commodities en 0,00 (WTI/BRENT/COPPER/NATGAS) y RVOL en 0.0x/sin datos** — hipótesis: límite del plan gratis de Twelve Data (símbolos de futuros y/o volumen real no incluidos en Basic). Pedro: probar en el navegador y reportar qué devuelven —
   1. `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿precios reales o error "symbol not found"/plan pago?)
   2. `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿el campo `"volume"` de cada barra viene con números reales o en `"0"`?)
