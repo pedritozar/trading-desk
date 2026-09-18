@@ -829,6 +829,7 @@ body {
   <button class="nav-btn" onclick="showTab('precios', this)">Precios</button>
   <button class="nav-btn" onclick="showTab('mercado', this); if(!mercadoInterval) initMercadoTab();">Mercado</button>
   <button class="nav-btn" onclick="showTab('indices', this); if(!indicesLoaded) initIndicesTab();">Índices</button>
+  <button class="nav-btn" onclick="showTab('commodities', this); if(!commoditiesLoaded) initCommoditiesTab();">Commodities</button>
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
   <button class="nav-btn" onclick="showTab('historico', this); if(!historicoLoaded) initHistoricoTab();">Histórico</button>
   <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
@@ -1288,6 +1289,22 @@ body {
       </div>
       <div class="rotacion-disclaimer">No es una matriz de correlación estadística (necesitaría series históricas por par) — es una vista secuencial de % de cambio del día, ordenada por huso horario (Asia → Rusia → EE.UU.), para ver a simple vista si el impulso de una sesión se sostuvo en la siguiente o si hubo divergencia. Útil como disparador de análisis Intermarket (CMT), no como señal de entrada.</div>
     </div>
+  </div>
+
+  <!-- ══ COMMODITIES TAB (Chicago/CBOT/COMEX) ══ -->
+  <div id="tab-commodities" class="tab-content">
+    <div class="section-title">Commodities — Chicago (CBOT/CME/COMEX) — Actualización semanal</div>
+    <div class="idx-grid" id="commodities-grid">
+      <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace;padding:40px 0">Cargando commodities…</div>
+    </div>
+    <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">
+      <span>Fuente: Yahoo Finance (vía proxy CORS) · caché local, se refresca solo si pasaron 7+ días</span>
+      <span style="display:flex;gap:10px;align-items:center">
+        <span id="commodities-last-update">—</span>
+        <button onclick="refreshCommodities(true)" style="font-size:9px;padding:4px 10px;background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-secondary);cursor:pointer">↻ Actualizar ahora</button>
+      </span>
+    </div>
+    <div class="rotacion-disclaimer">La "Var. semana" compara contra el precio guardado en la última actualización (no es el % diario de Yahoo) — pensado para un vistazo semanal, no para trading intradía de estos futuros. Primera vez que se carga cada commodity no hay comparación todavía (muestra "—").</div>
   </div>
 
   <!-- ══ EARNINGS TAB ══ -->
@@ -4526,6 +4543,7 @@ const STATIC_PRICES = {
 };
 
 let indicesLoaded = false;
+let commoditiesLoaded = false;
 let historicoLoaded = false;
 let historicoData = null;
 
@@ -4811,6 +4829,136 @@ function renderRotacionMercados(updated) {
   }).join('');
 
   container.innerHTML = rows || `<div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Sin datos</div>`;
+}
+
+// ══════════════════════════════════════
+// COMMODITIES — Chicago/CBOT/CME/COMEX (Claude — 2026-09-18)
+// Pedido de Pedro: seguimiento de trigo/arroz/carnes/energía/metales, cadencia
+// semanal (no diaria como Mercado/Índices) para no gastar de más. Reusa
+// fetchYahoo() y PROXY_CORS_URL ya existentes (mismo Worker que resolvió el
+// CORS de Índices) -- Twelve Data no cubre bien agro en el plan free (ver
+// pendiente "Commodities en 0,00" del CHANGELOG, ese bloque queda aparte).
+// Cache en localStorage con timestamp: si pasaron menos de 7 días desde el
+// último fetch, se muestra el dato guardado sin pegarle a la API de nuevo.
+// El botón "Actualizar ahora" fuerza el refresh ignorando el gate de 7 días.
+// ══════════════════════════════════════
+const COMMODITIES_CONFIG = [
+  { id:'trigo',  name:'Trigo (Wheat)',        flag:'🌾', ticker:'ZW=F',  unit:'USd/bushel' },
+  { id:'arroz',  name:'Arroz (Rough Rice)',   flag:'🍚', ticker:'ZR=F',  unit:'USD/cwt' },
+  { id:'maiz',   name:'Maíz (Corn)',          flag:'🌽', ticker:'ZC=F',  unit:'USd/bushel' },
+  { id:'ganado', name:'Ganado en pie',        flag:'🐄', ticker:'LE=F',  unit:'USd/lb' },
+  { id:'cerdo',  name:'Cerdo (Lean Hogs)',    flag:'🐖', ticker:'HE=F',  unit:'USd/lb' },
+  { id:'wti',    name:'Petróleo WTI',         flag:'🛢️', ticker:'CL=F',  unit:'USD/bbl' },
+  { id:'gas',    name:'Gas Natural',          flag:'🔥', ticker:'NG=F',  unit:'USD/MMBtu' },
+  { id:'oro',    name:'Oro',                  flag:'🥇', ticker:'GC=F',  unit:'USD/oz' },
+  { id:'plata',  name:'Plata',                flag:'🥈', ticker:'SI=F',  unit:'USD/oz' },
+  { id:'cobre',  name:'Cobre',                flag:'🟠', ticker:'HG=F',  unit:'USd/lb' },
+  { id:'acero',  name:'Acero HRC (Midwest)',  flag:'⚙️', ticker:'HRC=F', unit:'USD/ton' },
+];
+
+const COMMODITIES_CACHE_KEY = 'pei_commodities_cache';
+const COMMODITIES_REFRESH_DAYS = 7;
+
+function loadCommoditiesCache() {
+  try {
+    const raw = localStorage.getItem(COMMODITIES_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch(e) { console.warn('Commodities cache: error leyendo localStorage', e); return null; }
+}
+
+function saveCommoditiesCache(cache) {
+  try { localStorage.setItem(COMMODITIES_CACHE_KEY, JSON.stringify(cache)); }
+  catch(e) { console.warn('Commodities cache: error guardando localStorage', e); }
+}
+
+function buildCommodityCard(cfg, current, prevPrice) {
+  const hasData = current && typeof current.price === 'number';
+  const price = hasData ? current.price : null;
+  const status = hasData ? (current.status || 'closed') : 'static';
+
+  let changePct = null;
+  if (hasData && typeof prevPrice === 'number' && prevPrice !== 0) {
+    changePct = (price - prevPrice) / prevPrice * 100;
+  }
+  const changeClass = changePct === null ? 'flat' : changePct > 0 ? 'up' : changePct < 0 ? 'down' : 'flat';
+  const changeSign = changePct !== null && changePct > 0 ? '+' : '';
+  const changeStr = changePct !== null ? `${changeSign}${changePct.toFixed(2)}%` : '—';
+
+  const priceStr = hasData
+    ? price.toLocaleString('es-AR', {minimumFractionDigits:2, maximumFractionDigits:2})
+    : '—';
+
+  return `<div class="idx-card">
+    <div class="idx-header">
+      <div>
+        <div class="idx-name">${cfg.flag} ${cfg.name}</div>
+        <div class="idx-ticker">${cfg.ticker} · ${cfg.unit}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="idx-price">${priceStr}</div>
+        <div class="idx-change ${changeClass}">${changeStr} semana</div>
+      </div>
+    </div>
+    <div class="idx-status-row">
+      <span class="idx-source">Fuente: Yahoo Finance${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
+      <span class="idx-badge ${status}">${status === 'live' ? 'LIVE' : status === 'closed' ? 'CERRADO' : 'SIN DATOS'}</span>
+    </div>
+  </div>`;
+}
+
+function renderCommoditiesGrid(cache) {
+  const grid = document.getElementById('commodities-grid');
+  if (!grid) return;
+  const data = cache?.data || {};
+  const prevData = cache?.prevData || {};
+  grid.innerHTML = COMMODITIES_CONFIG.map(cfg =>
+    buildCommodityCard(cfg, data[cfg.id], prevData[cfg.id]?.price)
+  ).join('');
+
+  const elUpdate = document.getElementById('commodities-last-update');
+  if (elUpdate) {
+    if (cache?.fetchedAt) {
+      const diasAtras = Math.floor((Date.now() - cache.fetchedAt) / 86400000);
+      elUpdate.textContent = diasAtras === 0
+        ? 'Actualizado: hoy'
+        : `Actualizado: hace ${diasAtras}d`;
+    } else {
+      elUpdate.textContent = '—';
+    }
+  }
+}
+
+async function refreshCommodities(force) {
+  const cache = loadCommoditiesCache();
+  const ageMs = cache?.fetchedAt ? Date.now() - cache.fetchedAt : Infinity;
+  const staleMs = COMMODITIES_REFRESH_DAYS * 86400000;
+
+  if (!force && cache && ageMs < staleMs) {
+    renderCommoditiesGrid(cache);
+    return;
+  }
+
+  // Mostrar lo que haya en cache mientras se refresca, para no dejar la grilla vacía
+  if (cache) renderCommoditiesGrid(cache);
+
+  const results = {};
+  await Promise.all(COMMODITIES_CONFIG.map(async cfg => {
+    results[cfg.id] = await fetchYahoo(cfg.ticker);
+  }));
+
+  const newCache = {
+    fetchedAt: Date.now(),
+    data: results,
+    prevData: cache?.data || {},
+  };
+  saveCommoditiesCache(newCache);
+  renderCommoditiesGrid(newCache);
+}
+
+async function initCommoditiesTab() {
+  if (commoditiesLoaded) return;
+  commoditiesLoaded = true;
+  await refreshCommodities(false);
 }
 
 // Init calendar on load

@@ -40,6 +40,7 @@ ALLOWED_DIRS=(
   "historicos txt"
   "traiding:cmt"
   ".git"
+  "ZAR vanguard"  # proyecto Fondo de Emergencia -- convive acá a propósito (confirmado con Pedro 18/09)
 )
 
 ALERTAS=()

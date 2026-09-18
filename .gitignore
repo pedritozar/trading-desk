@@ -62,3 +62,6 @@ trades_*.csv
 traiding:cmt/
 trading-cmt/
 *.bak_*
+
+# ── Proyecto Fondo de Emergencia (ZAR Vanguard) -- vive acá, repo propio, no mezclar ──
+ZAR vanguard/
