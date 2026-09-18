@@ -45,7 +45,7 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 
 ---
 
-## Sesión 2026-09-18 (Cowork, 4ta) — Banner de aviso de Triple Witching en Overview — CERRADA, commit local sin pushear
+## Sesión 2026-09-18 (Cowork, 4ta) — Banner de aviso de Triple Witching en Overview — CERRADA, pusheada 18/09
 
 Pedro vio una noticia sobre el "triple witching" de hoy y pidió sumarlo al dashboard "sin tanta rigurosidad como los demás features, pero para estar presente y atento". Research antes de construir (WebSearch, con fuentes): triple witching es el tercer viernes de marzo/junio/septiembre/diciembre, cuando vencen a la vez opciones sobre acciones, futuros de índices y opciones de índices -- es una fecha 100% calculable de antemano, no depende de ninguna API. Efecto documentado: en 2021 el volumen promedio del S&P 500 casi se duplicó esos días y el rango intradía se expandió ~7% (Citadel Securities / optionalpha.com) -- es mecánica de rebalanceo forzado, no una señal direccional. Fechas 2026 confirmadas: 20/03, 19/06, **18/09 (hoy)** y 18/12.
 
@@ -57,7 +57,7 @@ Pedro vio una noticia sobre el "triple witching" de hoy y pidió sumarlo al dash
 
 ---
 
-## Sesión 2026-09-18 (Cowork, 3ra) — Mini-gráficos Commodities/Bonos + validación research DeepSeek (bonos globales) — CERRADA, commit local sin pushear
+## Sesión 2026-09-18 (Cowork, 3ra) — Mini-gráficos Commodities/Bonos + validación research DeepSeek (bonos globales) — CERRADA, pusheada 18/09
 
 Pedro le pasó a un chat de DeepSeek dedicado el resumen de research de la sesión anterior (bonos globales pendientes: Bund, Gilt, JGB, Rusia, China) para ampliar la búsqueda por su cuenta. Volvió con una propuesta concreta que Claude validó contra fuentes primarias antes de aceptar nada (nunca tomar un "✅" de otra IA como verificado):
 
@@ -83,7 +83,7 @@ Decisión: no se integró ninguno de los tres todavía. Arranca en Pendientes, e
 
 ---
 
-## Sesión 2026-09-18 (Cowork, 2da) — Feature Bonos (US Treasuries, CME Group) — CERRADA, commit local sin pushear
+## Sesión 2026-09-18 (Cowork, 2da) — Feature Bonos (US Treasuries, CME Group) — CERRADA, pusheada 18/09
 
 Pedro pidió un vistazo de día y semana de "T-bonds globales" (tiene cuenta en CME Group). Research antes de construir (WebSearch, no memoria): confirmado que Yahoo Finance tiene tickers reales para los futuros CME 2Y/5Y/10Y/30Y (`ZT=F`/`ZF=F`/`ZN=F`/`ZB=F`) y para los índices de yield 5Y/10Y/30Y (`^FVX`/`^TNX`/`^TYX`) -- páginas confirmadas en finance.yahoo.com. Para lo "global" del pedido (Bund alemán, Gilt UK, JGB japonés): Bund y JGB solo existen en Yahoo como índices de retorno total de Deutsche Bank (`^BUNL`/`^JGBL`) -- otra escala y otra lectura que el precio del futuro puro -- y Gilt no tiene ticker confiable en Yahoo (solo aparece en TradingView/Barchart, no habilitados acá). Presentado el research a Pedro: decidió arrancar solo con US Treasuries y dejar lo global pendiente de una fuente mejor.
 
@@ -95,7 +95,7 @@ Pedro pidió un vistazo de día y semana de "T-bonds globales" (tiene cuenta en 
 
 ---
 
-## Sesión 2026-09-18 (Cowork) — Feature Commodities Chicago/CBOT + skill de recomendación de modelo — CERRADA, commit local sin pushear
+## Sesión 2026-09-18 (Cowork) — Feature Commodities Chicago/CBOT + skill de recomendación de modelo — CERRADA, pusheada 18/09
 
 Pedro pidió dos cosas en paralelo: (1) una skill de Claude que sugiera subir de nivel "Medio" a "Alto" solo cuando la tarea sea grande/compleja (avisando el consumo extra de tokens, nunca cambiando el nivel por su cuenta) -- se armó y quedó propuesta para que Pedro la guarde, no toca este repo. (2) Sumar a las sesiones habituales un seguimiento de commodities de Chicago (CBOT/CME/COMEX): trigo, arroz, carnes, petróleo, gas, oro, y a pedido de Pedro también maíz, plata, cobre y acero.
 
@@ -186,7 +186,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 8 commits locales sin pushear (Commodities, Bonos, mini-gráficos, Triple Witching y sus CHANGELOGs) -- lista completa en Pendientes 🔴.
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). ✅ Pusheados los 8 commits pendientes (Commodities, Bonos, mini-gráficos, Triple Witching y sus CHANGELOGs) -- confirmado 18/09, main en GitHub queda en 43d5660.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
@@ -213,7 +213,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
-- [ ] **Pushear commits locales** (18/09): `19ebbc2` (tab Commodities + `check_folder.sh`/`.gitignore`), `96bf491` (CHANGELOG Commodities), `d5f04af` (tab Bonos US Treasuries), `3797fc9` (CHANGELOG Bonos), `a5b72bc` (mini-gráficos Commodities/Bonos), `bd90c9b` (CHANGELOG mini-gráficos), `0957061` (CHANGELOG Estado actual), `25b7395` (banner Triple Witching). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van todos juntos.
+- [x] ~~Pushear commits locales~~ — **pusheados 18/09** (`5cb613c..43d5660`): tab Commodities + `check_folder.sh`/`.gitignore`, CHANGELOG Commodities, tab Bonos US Treasuries, CHANGELOG Bonos, mini-gráficos Commodities/Bonos, CHANGELOG mini-gráficos, CHANGELOG Estado actual, banner Triple Witching y sus CHANGELOGs.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
