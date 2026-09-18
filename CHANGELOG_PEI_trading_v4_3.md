@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-18 (sesión Cowork, 3ra — mini-gráficos en Commodities/Bonos + validación de research de DeepSeek sobre bonos globales)
+**Última actualización:** 2026-09-18 (sesión Cowork, 4ta — banner de aviso de Triple Witching en Overview)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,6 +42,18 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 ### 4. No depender de globals implícitos en un handler (`event`, etc.)
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
+
+---
+
+## Sesión 2026-09-18 (Cowork, 4ta) — Banner de aviso de Triple Witching en Overview — CERRADA, commit local sin pushear
+
+Pedro vio una noticia sobre el "triple witching" de hoy y pidió sumarlo al dashboard "sin tanta rigurosidad como los demás features, pero para estar presente y atento". Research antes de construir (WebSearch, con fuentes): triple witching es el tercer viernes de marzo/junio/septiembre/diciembre, cuando vencen a la vez opciones sobre acciones, futuros de índices y opciones de índices -- es una fecha 100% calculable de antemano, no depende de ninguna API. Efecto documentado: en 2021 el volumen promedio del S&P 500 casi se duplicó esos días y el rango intradía se expandió ~7% (Citadel Securities / optionalpha.com) -- es mecánica de rebalanceo forzado, no una señal direccional. Fechas 2026 confirmadas: 20/03, 19/06, **18/09 (hoy)** y 18/12.
+
+**Decisiones confirmadas con Pedro antes de tocar código:** banner chico en Overview (mismo patrón visual que el banner de Consistencia del gestor, pero sin su rigurosidad) · avisar también unos días antes, no solo el día mismo.
+
+**Implementado:** `banner-triple-witching` (card nueva, debajo del banner de Consistencia). Al ser una fecha calculable no necesita fetch, localStorage ni historial -- se recalcula en cada `renderAll()`. `proximoTripleWitching()`/`tercerViernes()` (funciones puras) + `renderBannerTripleWitching()` agregada al array de `pasos` de `renderAll()` (dentro del try/catch del loop, Lección #2 -- son funciones sin estado persistente, no aplica la Lección #1 TDZ). Tres estados visuales: el día mismo (borde rojo, aviso fuerte + explicación de qué esperar), 3 días antes (`TRIPLE_WITCHING_AVISO_DIAS`, borde amarillo, aviso suave), y el resto del tiempo solo "Próximo triple witching: DD/MM" en chico sin alarma. Verificado a mano con `node`: la fecha calculada para hoy (18/09/2026) coincide exactamente con el vencimiento real, y el rollover a marzo del año siguiente después de diciembre funciona bien. `node --check` OK en los 3 bloques `<script>`. `index.html` sincronizado. `check_folder.sh` ✅ OK.
+
+*Cerrado: 2026-09-18, sesión Cowork (Claude Sonnet 5).*
 
 ---
 
@@ -177,6 +189,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). Quedan 2 commits locales sin pushear: el de `check_folder.sh` (14/09) si no se pusheó todavía, y el de la tab Commodities + ALLOWED_DIRS/.gitignore (18/09) -- ver Pendientes 🔴.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
+- ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
 - ✅ Métricas: Rachas, Drawdown (formato R+%+aviso muestra chica), TESLA/MALETA, Prop Firm, Kelly, Sesgo por Activo, Resumen Mensual/Anual — cada bloque aislado en su propio try/catch (Lección #2)
@@ -200,7 +213,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
-- [ ] **Pushear commits locales** (18/09): `19ebbc2` (tab Commodities + `check_folder.sh`/`.gitignore`), `96bf491` (CHANGELOG Commodities), `d5f04af` (tab Bonos US Treasuries), `3797fc9` (CHANGELOG Bonos), `a5b72bc` (mini-gráficos Commodities/Bonos), `bd90c9b` (CHANGELOG mini-gráficos). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van todos juntos.
+- [ ] **Pushear commits locales** (18/09): `19ebbc2` (tab Commodities + `check_folder.sh`/`.gitignore`), `96bf491` (CHANGELOG Commodities), `d5f04af` (tab Bonos US Treasuries), `3797fc9` (CHANGELOG Bonos), `a5b72bc` (mini-gráficos Commodities/Bonos), `bd90c9b` (CHANGELOG mini-gráficos), `0957061` (CHANGELOG Estado actual), `25b7395` (banner Triple Witching). Verificar primero si el commit del 14/09 (badge ESTÁTICO/CERRADO) ya se pusheó -- si no, van todos juntos.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente).
