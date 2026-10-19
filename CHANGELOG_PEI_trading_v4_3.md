@@ -45,7 +45,7 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 
 ---
 
-## Sesión 2026-10-19 (Cowork, 5ta) — RGBI/OFZ ruso vía MOEX ISS en tab Bonos + fix Yahoo sin datos — CERRADA, commits locales sin pushear
+## Sesión 2026-10-19 (Cowork, 5ta) — RGBI/OFZ ruso vía MOEX ISS en tab Bonos + fix Yahoo sin datos — CERRADA, pusheada 19/10
 
 Retomando el pendiente de 🟡 Media prioridad (bonos globales, 18/09): de los cuatro candidatos (Bund, JGB, Gilt, Rusia, China), el OFZ ruso vía MOEX ISS era el único validado al 100% contra el código real en la sesión del 18/09 (3ra) -- `fetchMOEX()` ya pega directo a `iss.moex.com` sin proxy CORS. Pedro confirmó arrancar por ahí ("arranca si, prosigue").
 
@@ -59,7 +59,7 @@ Retomando el pendiente de 🟡 Media prioridad (bonos globales, 18/09): de los c
 
 Quedan pendientes, sin fuente gratuita confirmada: CGB chino (Sina Finance, CORS sin probar), JGB japonés (solo yield, sin fuente confirmada), Bund alemán y Gilt UK (sin fuente viable todavía).
 
-Verificado: `node --check` OK en los 2 bloques `<script>`, `index.html` sincronizado con la fuente (`diff -q` IGUALES), `check_folder.sh` ✅ OK. Commits locales (`ce8b6f3` RGBI, `e978950` fix proxy/caché, más los de CHANGELOG), sin pushear -- Pedro pushea desde su Terminal.
+Verificado: `node --check` OK en los 2 bloques `<script>`, `index.html` sincronizado con la fuente (`diff -q` IGUALES), `check_folder.sh` ✅ OK. Commits locales (`ce8b6f3` RGBI, `e978950` fix proxy/caché, más los de CHANGELOG), pusheados por Pedro desde su Terminal (`468169a..b9dbac2`).
 
 *Cerrado: 2026-10-19, sesión Cowork (Claude Sonnet 5).*
 
@@ -206,7 +206,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `468169a` (18/09). ⚠️ **5 commits locales sin pushear al 19/10** (ver 🔴 Alta prioridad): lo de RGBI y el fix de Yahoo/proxy está en la carpeta local y funciona abriendo `index.html`, pero NO en la URL en vivo hasta que Pedro pushee.
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `b9dbac2` — **pusheado 19/10** (`468169a..b9dbac2`, 5 commits: RGBI/OFZ ruso, fix proxy CORS por defecto + reintento de snapshots incompletos, y sus CHANGELOGs). Falta que Pedro confirme Commodities/Bonos en la URL en vivo con recarga forzada (Cmd+Shift+R).
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
@@ -235,7 +235,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Pendientes Trading System
 
 ### 🔴 Alta prioridad
-- [ ] **Pushear commits locales (19/10)** — 5 commits sobre `468169a`: `ce8b6f3` RGBI/OFZ ruso · `26b6b93` CHANGELOG · `e978950` fix proxy CORS por defecto + reintento de snapshots incompletos · `64f2050` CHANGELOG · más el commit de CHANGELOG/Config de cierre de esta sesión. Pedro pushea desde su Terminal (nunca Claude): `cd ~/Desktop/trading-desk && git push origin main`.
+- [x] ~~Pushear commits locales (19/10)~~ — **pusheados 19/10** (`468169a..b9dbac2`): RGBI/OFZ ruso (`ce8b6f3`), fix proxy CORS por defecto + reintento de snapshots incompletos (`e978950`) y sus CHANGELOGs (`26b6b93`, `64f2050`, `b9dbac2`).
 - [x] ~~Pushear commits locales~~ — **pusheados 18/09** (`5cb613c..43d5660`): tab Commodities + `check_folder.sh`/`.gitignore`, CHANGELOG Commodities, tab Bonos US Treasuries, CHANGELOG Bonos, mini-gráficos Commodities/Bonos, CHANGELOG mini-gráficos, CHANGELOG Estado actual, banner Triple Witching y sus CHANGELOGs.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
