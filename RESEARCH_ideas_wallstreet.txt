@@ -47,3 +47,30 @@ Tercera tanda pedida por Pedro (sesión 14/09), expandiendo el research a 7 tipo
 
 Ninguna de las 7 se construye todavía — mismo criterio que la tanda anterior: quedan documentadas con la fuente para cuando Pedro decida cuál vale la pena.
 
+
+
+## 2026-10-19 — Tanda 4 (citas verificables para el banner de ausencia del dashboard)
+Research pedido por Pedro (19/10) para darle "cuerpo y énfasis" al banner de "días sin operar": juntar citas de figuras del mundo financiero (EE.UU., Rusia, China) y que el dashboard muestre una según los días de ausencia. Regla de esta tanda: SOLO entra una cita si se pudo leer en una fuente primaria (carta, libro, informe) con autor + año + fuente. Lo que circula por internet sin fuente primaria queda en "DESCARTADO / SIN VERIFICAR" -- no es que sea falso, es que no se pudo probar, y en finanzas la mitad de las frases virales están mal atribuidas.
+Estado: NINGUNA está aprobada ni implementada. Pedro tiene que aprobar cita por cita antes de que entre al código. Las traducciones al español son mías (marcadas "trad.") -- el texto original es el que vale.
+
+### Verificadas contra texto primario (candidatas)
+1. Warren Buffett, carta a los accionistas de Berkshire Hathaway, año 1990 (EE.UU.): "Lethargy bordering on sloth remains the cornerstone of our investment style." (trad.: "La letargia al borde de la pereza sigue siendo la piedra angular de nuestro estilo de inversión.") Seguida de: "This year we neither bought nor sold a share of five of our six major holdings." Verificada en una transcripción completa de la carta (midgardfinance.com/buffett/letters/1990/); falta cotejarla contra berkshirehathaway.com/letters/1990.html (la herramienta pidió permiso de URL y no se respondió a tiempo). Ojo de contexto: la cita habla de NO operar a propósito -- sirve para un mensaje de "no operar no es lo mismo que no gestionar", no para el de "volvé a la rutina". Buffett, misma carta: "The most important thing to do when you find yourself in a hole is to stop digging." (sin cotejar aún contra la carta oficial).
+2. Edwin Lefèvre, "Reminiscences of a Stock Operator" (1923; el protagonista, "Larry Livingston", está basado en Jesse Livermore -- se cita al libro, no a Livermore en persona). Texto de Project Gutenberg (ebook 60979): "The desire for constant action irrespective of underlying conditions is responsible for many losses in Wall Street" (cap. II) · "No man can always have adequate reasons for buying or selling stocks daily" (cap. II) · "Men who can both be right and sit tight are uncommon" (cap. V) · "It never was my thinking that made the big money for me" (cap. V). AVISO: la versión viral ("It never was my thinking that made the big money for me. It always was my sitting.") puede tener la segunda oración con otro orden de palabras en el libro real ("It was always my sitting") -- la lectura automática no lo resolvió; usar solo la primera oración o cotejar a mano antes de citar entera.
+3. Bill Ackman, carta anual de Pershing Square Holdings, año 2018 (EE.UU.; pershingsquareholdings.com, PDF "2018 Annual Report Letter Only"): "As I have often said, experience is making mistakes and learning from them, and learn we have done." · "we have found a strategy that works, so we intend to stick to it." · "It is the rare public markets investor that has the privilege to invest truly long duration capital." Las tres encajan mejor con "volvé a tu proceso" que con "ausencia" -- la de la estrategia que funciona sirve para el mensaje de retomar la rutina.
+
+### China -- una sola candidata, y es clásica, no moderna
+4. Bai Gui (白圭), comerciante del s. IV a.C., en Sima Qian, "Registros del Gran Historiador" (Shiji), cap. "Biografías de los mercaderes": "人弃我取，人取我与" (trad. del sitio 5000yan.com: "Tomá lo que otros descartan, dá lo que otros buscan"). Confirmé la fuente y la traducción en un sitio de modismos; NO pude leer el texto chino original en ctext.org (permiso de URL sin responder) -- falta cotejar la frase en chino clásico y la versión de Burton Watson. Es una máxima contraria (comprar cuando todos venden), no habla de ausencia: sirve para un mensaje de "mirá el mercado aunque no operes".
+Li Lu (Himalaya Capital): discurso de 2015 en Peking University existe y está traducido (offpisteinvesting.com, trad. de Graham Rhodes), pero la página no trae el texto del PDF y no pude extraer ninguna frase textual -- SIN CITA VERIFICADA. Duan Yongping: solo apuntes secundarios (GuruFocus) -- SIN CITA VERIFICADA.
+
+### Rusia -- no se encontró nada verificable de un financista
+Se buscó en inglés (Nabiullina/Kondratiev/Potanin/Milner/Tinkov/Aven/Fyodorov): los resultados fueron biografías y agregadores de frases (BrainyQuote), ninguna cita con fuente primaria sobre disciplina o paciencia en mercados. No se rellena con apócrifas. Opciones honestas: (a) un proverbio ruso rotulado como "proverbio popular, sin autor" (ej. "Семь раз отмерь, один раз отрежь" -- "medí siete veces, cortá una"; recopilado en Dal, "Пословицы русского народа", 1862, falta cotejar la redacción exacta); (b) que Pedro mismo aporte una fuente en ruso que conozca (entrevista, libro) y se verifica; (c) dejar Rusia afuera por ahora.
+
+### DESCARTADO / SIN VERIFICAR (no entra)
+- "The stock market is a device for transferring money from the impatient to the patient" (atribuida a Buffett) -- solo apareció en agregadores de frases (Stockopedia, kwize), sin fuente primaria. Hay variantes ("from the active to the patient") que muestran que la redacción cambia según quién la cite.
+- Frases virales de Buffett/Ackman/Munger sin carta ni libro que las respalde: no se incluyen.
+
+### Decisiones pendientes de Pedro antes de tocar código
+- Cuáles de las candidatas aprueba (cita por cita) y si acepta el rótulo "trad." con el original al lado.
+- Qué hacer con Rusia (a, b o c, arriba).
+- Que las citas vayan en un grupo aparte, DESPUÉS de los mensajes propios de Pedro (decisión de diseño original: "el dashboard solo entrega, no genera").
+- No arrancar el código hasta cargar los trades de agosto (el banner hoy dice "124 días" por el CSV desactualizado).
