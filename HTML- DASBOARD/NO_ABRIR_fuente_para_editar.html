@@ -1639,7 +1639,7 @@ function guardarConfigKeys() {
 
   const pVal = (document.getElementById('cfg-proxy').value || '').trim().replace(/\/$/, '');
   if (pVal) { localStorage.setItem('pei_proxy_url', pVal); PROXY_CORS_URL = pVal; }
-  else { localStorage.removeItem('pei_proxy_url'); PROXY_CORS_URL = ''; }
+  else { localStorage.removeItem('pei_proxy_url'); PROXY_CORS_URL = PROXY_CORS_DEFAULT; }
 
   checkFinnhubLen();
   const status = document.getElementById('cfg-status');
@@ -1655,7 +1655,7 @@ function restaurarConfigDefaults() {
   localStorage.removeItem('pei_proxy_url');
   FINNHUB_KEY = FINNHUB_KEY_DEFAULT;
   TWELVE_DATA_KEY = TWELVE_DATA_KEY_DEFAULT;
-  PROXY_CORS_URL = '';
+  PROXY_CORS_URL = PROXY_CORS_DEFAULT;
   initConfigTab();
   const status = document.getElementById('cfg-status');
   if (status) {
@@ -1683,9 +1683,13 @@ function showTab(tab, btn) {
 // Si algún día vuelve a fallar, verificar PRIMERO que la key tenga 40 chars.
 const FINNHUB_KEY_DEFAULT = 'd74v8h1r01qg1eo710m0d74v8h1r01qg1eo710mg';
 let FINNHUB_KEY = localStorage.getItem('pei_finnhub_key') || FINNHUB_KEY_DEFAULT;
-// Proxy CORS opcional (Cloudflare Worker) -- vacío = sin proxy, comportamiento actual sin cambios.
-// Ver cloudflare_worker_proxy.js + instrucciones en el CHANGELOG para deployarlo.
-let PROXY_CORS_URL = localStorage.getItem('pei_proxy_url') || '';
+// Proxy CORS (Cloudflare Worker de Pedro). Antes vivía SOLO en localStorage (cada navegador/origen
+// arrancaba vacío y Commodities/Bonos/Índices quedaban sin datos: bug real 19/10). Ahora tiene valor
+// por defecto en el código, igual que las keys de Finnhub/Twelve Data. El Worker solo acepta hosts de
+// Yahoo (allowlist en cloudflare_worker_proxy.js), por eso es seguro dejarlo público en el repo.
+// Config sigue permitiendo pisarlo; "Restaurar valores por defecto" vuelve a este.
+const PROXY_CORS_DEFAULT = 'https://pei-cors-proxy.pzacarias18.workers.dev';
+let PROXY_CORS_URL = localStorage.getItem('pei_proxy_url') || PROXY_CORS_DEFAULT;
 
 // ⚠ MESES_ABREV va acá arriba a propósito: `restoreCSV()` corre apenas carga la
 // página (mucho antes de este punto del archivo) y termina llamando a
@@ -5044,7 +5048,8 @@ async function refreshCommodities(force) {
   const ageMs = ultimo?.date ? Date.now() - new Date(ultimo.date).getTime() : Infinity;
   const staleMs = COMMODITIES_REFRESH_DAYS * 86400000;
 
-  if (!force && history.length && ageMs < staleMs) {
+  const incompleto = history.length > 0 && !snapshotCompleto(ultimo, COMMODITIES_CONFIG);
+  if (!force && history.length && ageMs < staleMs && !incompleto) {
     renderCommoditiesGrid(history);
     return;
   }
@@ -5052,14 +5057,17 @@ async function refreshCommodities(force) {
   // Mostrar lo que haya en historial mientras se refresca, para no dejar la grilla vacía
   if (history.length) renderCommoditiesGrid(history);
 
-  const results = {};
-  await Promise.all(COMMODITIES_CONFIG.map(async cfg => {
-    results[cfg.id] = await fetchYahoo(cfg.ticker);
-  }));
-
   const hoy = hoyISO();
   const yaHoy = history.length && history[history.length - 1].date === hoy;
-  if (yaHoy) {
+  // Solo se rescata dato bueno del snapshot de HOY (nunca se mezcla un precio de otro día con fecha de hoy)
+  const prevHoy = yaHoy ? (history[history.length - 1].data || {}) : {};
+  const results = {};
+  await Promise.all(COMMODITIES_CONFIG.map(async cfg => {
+    results[cfg.id] = (await fetchYahoo(cfg.ticker)) || prevHoy[cfg.id] || null;
+  }));
+
+  // Un snapshot incompleto se reemplaza en el lugar (no suma una entrada más al historial semanal)
+  if (yaHoy || incompleto) {
     history[history.length - 1] = { date: hoy, data: results };
   } else {
     history.push({ date: hoy, data: results });
@@ -5144,6 +5152,14 @@ const BONOS_SEMANA_MIN_DIAS = 5;
 
 function hoyISO() {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Bug real 19/10: si Yahoo fallaba (proxy ausente), se guardaba igual un snapshot con todo en null y la
+// lógica de caché lo daba por "al día" (Bonos: hasta mañana; Commodities: 7 días) -- aunque se arreglara
+// el proxy, no reintentaba. Ahora un snapshot sin precio en algún instrumento se considera incompleto
+// y se reintenta en la próxima apertura de la tab.
+function snapshotCompleto(snap, config) {
+  return !!snap && config.every(c => typeof snap?.data?.[c.id]?.price === 'number');
 }
 
 function loadBonosHistory() {
@@ -5245,16 +5261,19 @@ async function refreshBonos(force) {
   const hoy = hoyISO();
   const yaHoy = history.length && history[history.length - 1].date === hoy;
 
-  if (!force && yaHoy) {
+  if (!force && yaHoy && snapshotCompleto(history[history.length - 1], BONOS_CONFIG)) {
     renderBonosGrid(history);
     return;
   }
 
   if (history.length) renderBonosGrid(history); // mostrar lo último mientras refresca
 
+  // Si ya hay snapshot de hoy, un reintento que falle NO pisa un dato bueno con null
+  const prevHoy = yaHoy ? (history[history.length - 1].data || {}) : {};
   const results = {};
   await Promise.all(BONOS_CONFIG.map(async cfg => {
-    results[cfg.id] = cfg.fuente === 'moex' ? await fetchMOEXIndice(cfg.ticker) : await fetchYahoo(cfg.ticker);
+    const nuevo = cfg.fuente === 'moex' ? await fetchMOEXIndice(cfg.ticker) : await fetchYahoo(cfg.ticker);
+    results[cfg.id] = nuevo || prevHoy[cfg.id] || null;
   }));
 
   if (yaHoy) {
