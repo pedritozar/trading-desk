@@ -1398,9 +1398,9 @@ body {
           <input type="text" id="cfg-twelvedata" class="config-input" spellcheck="false" placeholder="API key de Twelve Data">
         </div>
         <div class="config-row">
-          <label class="config-label">Proxy CORS (Cloudflare Worker) — opcional, arregla HSTECH/MOEX/CSI300</label>
+          <label class="config-label">Proxy CORS (Cloudflare Worker) — por defecto, para Yahoo Finance</label>
           <input type="text" id="cfg-proxy" class="config-input" spellcheck="false" placeholder="https://tu-worker.tu-usuario.workers.dev">
-          <div class="config-hint">Sin esto, Índices sigue andando igual que hoy (SPX/RUT/SOX ok, HSTECH/MOEX/CSI300 en blanco por CORS de Yahoo Finance). Con el proxy deployado se completan los 6. Ver <code>cloudflare_worker_proxy.js</code> + instrucciones en el CHANGELOG.</div>
+          <div class="config-hint">Viene cargado por defecto (Worker de Cloudflare propio, solo acepta hosts de Yahoo). Lo usan Índices (HSTECH/MOEX/CSI300), Commodities y Bonos: Yahoo bloquea el fetch directo por CORS. Dejalo vacío y GUARDAR para volver al valor por defecto. Ver <code>cloudflare_worker_proxy.js</code> + instrucciones en el CHANGELOG.</div>
         </div>
         <div style="display:flex;gap:10px;align-items:center">
           <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigKeys()">Guardar</button>
