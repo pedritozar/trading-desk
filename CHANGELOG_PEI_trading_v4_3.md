@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-09-18 (sesión Cowork, 4ta — banner de aviso de Triple Witching en Overview)
+**Última actualización:** 2026-10-19 (sesión Cowork, 5ta — RGBI/OFZ ruso vía MOEX ISS en tab Bonos)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -42,6 +42,24 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 ### 4. No depender de globals implícitos en un handler (`event`, etc.)
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
+
+---
+
+## Sesión 2026-10-19 (Cowork, 5ta) — RGBI/OFZ ruso vía MOEX ISS en tab Bonos — CERRADA, commit local sin pushear
+
+Retomando el pendiente de 🟡 Media prioridad (bonos globales, 18/09): de los cuatro candidatos (Bund, JGB, Gilt, Rusia, China), el OFZ ruso vía MOEX ISS era el único validado al 100% contra el código real en la sesión del 18/09 (3ra) -- `fetchMOEX()` ya pega directo a `iss.moex.com` sin proxy CORS. Pedro confirmó arrancar por ahí ("arranca si, prosigue").
+
+**Implementado:** nueva fila en `BONOS_CONFIG` (`id:'rgbi'`, ticker `RGBI` -- índice de precio limpio del mercado de OFZ, el más citado como "índice de bonos rusos") con `fuente:'moex'`. Nueva función `fetchMOEXIndice()`: mismo patrón de 2 intentos que `fetchMOEX()` (board `SNDX` fijo, y si no hay dato, fallback sin filtro de board -- la misma causa que tuvo RTSI, fix 09/09, por eso el fallback viene incluido desde el día 1 en vez de esperar a que falle en vivo). Devuelve la misma forma `{price, change, status}` que `fetchYahoo()`, así que `refreshBonos()` solo necesitó un branch de una línea (`cfg.fuente === 'moex' ? fetchMOEXIndice(...) : fetchYahoo(...)`) y `buildBonoCard()` un label de fuente dinámico ("MOEX ISS" vs "Yahoo Finance"). No se tocó `renderAll()` -- Bonos sigue siendo tab lazy-loaded, no aplica la Lección #1 (TDZ).
+
+**Nota sobre el endpoint de MOEX ISS:** no distingue mercado abierto/cerrado en los campos pedidos (`marketdata`), así que el `status` queda fijo en `'closed'` cuando hay dato -- mismo criterio de cadencia diaria que ya tiene el resto de Bonos, no es una limitación nueva.
+
+**Pendiente de testear (no verificado en vivo todavía):** tanto el sandbox de Claude como el Mac de Pedro bloquean `iss.moex.com` por política de red (mismo bloqueo que ya afectaba pruebas de CORS con `curl` en sesiones anteriores) -- no se pudo confirmar en esta sesión que el board `SNDX` sea el correcto para `RGBI` (si no lo es, el fallback sin board debería encontrarlo igual, pero falta la prueba real en el browser de Pedro). **Pedro: abrir el tab Bonos y confirmar que la card de RGBI muestra un precio real** (no "—" ni "SIN DATOS") antes de dar esto por cerrado del todo.
+
+Quedan pendientes, sin fuente gratuita confirmada: CGB chino (Sina Finance, CORS sin probar), JGB japonés (solo yield, sin fuente confirmada), Bund alemán y Gilt UK (sin fuente viable todavía).
+
+Verificado: `node --check` OK en los 2 bloques `<script>`, `index.html` sincronizado con la fuente (`diff -q` IGUALES), `check_folder.sh` ✅ OK. Commit local hecho (`ce8b6f3`), sin pushear -- Pedro pushea desde su Terminal.
+
+*Cerrado: 2026-10-19, sesión Cowork (Claude Sonnet 5).*
 
 ---
 
@@ -189,6 +207,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). ✅ Pusheados los 8 commits pendientes (Commodities, Bonos, mini-gráficos, Triple Witching y sus CHANGELOGs) -- confirmado 18/09, main en GitHub queda en 43d5660.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
+- ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. Sin verificar en vivo todavía (ver Pendientes).
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
@@ -220,7 +239,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
-- [ ] **Bonos globales (Bund, JGB, Gilt, Rusia, China)** — pedido explícito de Pedro (18/09). Research de DeepSeek validado (18/09, 3ra sesión): **OFZ ruso vía MOEX ISS — verificado, listo para integrar** (mismo patrón que `fetchMOEX()`, sin proxy CORS necesario). **CGB chino vía Sina Finance — dato real, falta confirmar CORS** (Pedro prueba el fetch a mano en su navegador antes de sumarlo). **JGB japonés vía J-Quants — el free tier NO incluye futuros** (solo Premium pago); si se quiere, sería solo el yield vía otra fuente sin confirmar cobertura todavía. **Bund y Gilt siguen sin fuente gratuita viable.** Próximo paso: integrar OFZ ruso primero (el único verificado al 100%).
+- [x] ~~OFZ ruso (RGBI) vía MOEX ISS~~ — **integrado 19/10** (5ta sesión), ver Estado actual. Falta solo que Pedro confirme en el browser que la card muestra precio real (el sandbox no pudo probar el fetch en vivo, bloqueo de red).
+- [ ] **Bonos globales restantes (Bund, JGB, Gilt, China)** — pedido explícito de Pedro (18/09). **CGB chino vía Sina Finance — dato real, falta confirmar CORS** (Pedro prueba el fetch a mano en su navegador antes de sumarlo). **JGB japonés vía J-Quants — el free tier NO incluye futuros** (solo Premium pago); si se quiere, sería solo el yield vía otra fuente sin confirmar cobertura todavía. **Bund y Gilt siguen sin fuente gratuita viable.**
 - [ ] **Commodities en 0,00 (WTI/BRENT/COPPER/NATGAS) y RVOL en 0.0x/sin datos** — hipótesis: límite del plan gratis de Twelve Data (símbolos de futuros y/o volumen real no incluidos en Basic). Pedro: probar en el navegador y reportar qué devuelven —
   1. `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿precios reales o error "symbol not found"/plan pago?)
   2. `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿el campo `"volume"` de cada barra viene con números reales o en `"0"`?)
@@ -377,6 +397,7 @@ git push origin main
 - ✅ **Fix 20/08:** regla nueva en el `sys` para preservar arquitectura cuando el contexto trae código existente (antes reescribía todo de cero al pedirle "extender"). Confirmado con caso real.
 - 💬 Idea en debate: "Modo Auditor" — sin resolver
 - ✅ **Resuelto (01/09):** `PRECIOS` ahora usa `getPrecios()` con corte automático por fecha (`PROMO_SONNET5_FIN`) — ya devuelve e:0.003/s:0.015 sin tocar el archivo a mano.
+- ✅ **18/10:** Reactor migrado a gen 5.5 y ya activo en `generador.html` (Sonnet 5.5 / Opus 5.5 / Haiku 5.5, `getPrecios(modelo, itok)` sin promo; respaldo del original en `reactor IA/generador_BACKUP_pre55_2026-10-18.html`). Falta una generación de prueba con Sonnet 5.5 y Haiku 5.5. Detalle y motivos en `CHANGELOG_reactor.md`.
 
 ---
 
