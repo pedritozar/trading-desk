@@ -5100,7 +5100,43 @@ const BONOS_CONFIG = [
   { id:'y5',    name:'Yield 5Y',           flag:'📈', ticker:'^FVX',  kind:'yield',  unit:'%' },
   { id:'y10',   name:'Yield 10Y',          flag:'📈', ticker:'^TNX',  kind:'yield',  unit:'%' },
   { id:'y30',   name:'Yield 30Y',          flag:'📈', ticker:'^TYX',  kind:'yield',  unit:'%' },
+  // OFZ ruso vía MOEX ISS (Claude — 2026-10-19). Pendiente desde 18/09 (research de
+  // DeepSeek validado contra el código real: fetchMOEX() ya pega directo a iss.moex.com
+  // sin proxy CORS). RGBI = índice de precio limpio del mercado de OFZ (bonos soberanos
+  // rusos), el más citado como "índice de bonos rusos". fuente:'moex' le dice a
+  // refreshBonos() que use fetchMOEXIndice() en vez de fetchYahoo() para esta fila.
+  { id:'rgbi',  name:'RGBI (OFZ ruso)',    flag:'🇷🇺', ticker:'RGBI',  kind:'indice', unit:'pts', fuente:'moex' },
 ];
+
+// RGBI (OFZ ruso) vía MOEX ISS — mismo patrón de 2 intentos que fetchMOEX() (board fijo
+// 'SNDX', y si no hay dato, fallback sin filtro de board -- la misma causa que tuvo RTSI,
+// fix 09/09, por eso ya viene con el fallback incluido desde el día 1). Devuelve la misma
+// forma que fetchYahoo() ({price, change, status}) para que refreshBonos()/buildBonoCard()
+// no necesiten saber de qué fuente viene cada fila. Este endpoint no distingue mercado
+// abierto/cerrado -- se marca 'closed' siempre que haya dato (snapshot diario, misma
+// cadencia que el resto de Bonos).
+async function fetchMOEXIndice(ticker) {
+  try {
+    const url = `https://iss.moex.com/iss/engines/stock/markets/index/boards/SNDX/securities/${ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=SECID,CURRENTVALUE,LASTTOPREVPRICE`;
+    const res = await fetch(url);
+    const d = await res.json();
+    const row = d?.marketdata?.data?.[0];
+    if (row && row[1] != null) {
+      return { price: parseFloat(row[1]), change: parseFloat(row[2]) || 0, status: 'closed' };
+    }
+  } catch(e) {}
+  try {
+    const url2 = `https://iss.moex.com/iss/engines/stock/markets/index/securities/${ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=BOARDID,SECID,CURRENTVALUE,LASTTOPREVPRICE`;
+    const res2 = await fetch(url2);
+    const d2 = await res2.json();
+    const rows = d2?.marketdata?.data || [];
+    const row2 = rows.find(r => r[2] != null);
+    if (row2) {
+      return { price: parseFloat(row2[2]), change: parseFloat(row2[3]) || 0, status: 'closed' };
+    }
+  } catch(e) {}
+  return null;
+}
 
 const BONOS_HISTORY_KEY = 'pei_bonos_history';
 const BONOS_HISTORY_MAX = 30; // ~1 mes de snapshots diarios -- alcanza para el mini gráfico (fix 18/09 2da)
@@ -5161,7 +5197,7 @@ function buildBonoCard(cfg, current, changeSemana, retSeries) {
       ${retSeries ? renderSVGCurve(retSeries) : '<div style="color:var(--text-muted);font-size:10px">Acumulando historial (necesita 2+ días guardados)</div>'}
     </div>
     <div class="idx-status-row">
-      <span class="idx-source">Fuente: Yahoo Finance${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
+      <span class="idx-source">Fuente: ${cfg.fuente === 'moex' ? 'MOEX ISS' : 'Yahoo Finance'}${status === 'live' ? ' · live' : status === 'closed' ? ' · cierre' : ' · sin datos'}</span>
       <span class="idx-badge ${status}">${status === 'live' ? 'LIVE' : status === 'closed' ? 'CERRADO' : 'SIN DATOS'}</span>
     </div>
   </div>`;
@@ -5218,7 +5254,7 @@ async function refreshBonos(force) {
 
   const results = {};
   await Promise.all(BONOS_CONFIG.map(async cfg => {
-    results[cfg.id] = await fetchYahoo(cfg.ticker);
+    results[cfg.id] = cfg.fuente === 'moex' ? await fetchMOEXIndice(cfg.ticker) : await fetchYahoo(cfg.ticker);
   }));
 
   if (yaHoy) {
