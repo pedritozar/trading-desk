@@ -74,3 +74,12 @@ Se buscó en inglés (Nabiullina/Kondratiev/Potanin/Milner/Tinkov/Aven/Fyodorov)
 - Qué hacer con Rusia (a, b o c, arriba).
 - Que las citas vayan en un grupo aparte, DESPUÉS de los mensajes propios de Pedro (decisión de diseño original: "el dashboard solo entrega, no genera").
 - No arrancar el código hasta cargar los trades de agosto (el banner hoy dice "124 días" por el CSV desactualizado).
+
+═══════════════════════════════════════
+TANDA 4 -- DECISIÓN E IMPLEMENTACIÓN (2026-10-19, Pedro aprobó)
+═══════════════════════════════════════
+Pedro aprobó las candidatas de la Tanda 4 ("agrega esas que encontraste, rusia dejamos afuera hasta que encuentre uno relevante").
+- Entran 7 citas: Buffett (1990), Lefèvre x2 (cap. II y V), Ackman x3 (carta 2018), Bai Gui (Shiji).
+- Rusia: queda AFUERA hasta que aparezca una cita relevante y verificada.
+- Quedan sin verificar del todo: Buffett 1990 (cotejada en transcripción, no en página oficial) y el texto chino de Bai Gui (no cotejado contra ctext.org). Marcados en comentario del código (CITAS_AUSENCIA).
+- Implementado en el banner de ausencia (ver CHANGELOG). Se agregó criterio propio de Claude, a validar por Pedro: las citas que elogian esperar/no operar (Buffett, Lefèvre, Ackman "long duration") solo salen con <30 días de ausencia; con ≥30 días salen solo las de "retomar el proceso" (Ackman x2, Bai Gui), para que no funcionen como permiso para seguir sin operar.

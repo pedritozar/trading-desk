@@ -1704,6 +1704,39 @@ const MESES_ABREV = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct'
 // renderMetricas() a la mitad -> Tesla/Maleta/Drawdown quedan en blanco.
 const DD_MUESTRA_CHICA_R = 5;
 
+// ⚠ Mismo motivo (TDZ): usada por renderBannerConsistencia(), que corre dentro de
+// renderAll(). Citas del banner de ausencia (Claude — 19/10, research Tanda 4 en
+// RESEARCH_ideas_wallstreet.txt, aprobadas por Pedro). Cada campo viene de fuente
+// verificada; 'trad' es traducción de Claude al español (se marca en pantalla).
+// tono 'paciencia' = elogia esperar/no operar -> solo se muestra si la ausencia es
+// corta (<30 días), para que no funcione como permiso para seguir sin operar.
+// tono 'retomar'  = sirve para volver al proceso -> se usa en cualquier ausencia.
+// Rusia: excluida hasta encontrar una cita relevante y verificada.
+// PENDIENTE: el texto chino de Bai Gui (Shiji) no está cotejado contra ctext.org.
+const CITAS_AUSENCIA = [
+  { tono:'paciencia', autor:'Warren Buffett', fuente:'Carta a accionistas de Berkshire, 1990',
+    texto:'Lethargy bordering on sloth remains the cornerstone of our investment style.',
+    trad:'La letargia al borde de la pereza sigue siendo la piedra angular de nuestro estilo de inversión.' },
+  { tono:'paciencia', autor:'Edwin Lefèvre', fuente:'Reminiscences of a Stock Operator (1923), cap. II',
+    texto:'The desire for constant action irrespective of underlying conditions is responsible for many losses in Wall Street.',
+    trad:'El deseo de actuar constantemente, sin importar las condiciones de fondo, es responsable de muchas pérdidas en Wall Street.' },
+  { tono:'paciencia', autor:'Edwin Lefèvre', fuente:'Reminiscences of a Stock Operator (1923), cap. V',
+    texto:'Men who can both be right and sit tight are uncommon.',
+    trad:'Los hombres que pueden tener razón y además aguantar sentados son poco comunes.' },
+  { tono:'paciencia', autor:'Bill Ackman', fuente:'Carta anual Pershing Square Holdings, 2018',
+    texto:'It is the rare public markets investor that has the privilege to invest truly long duration capital.',
+    trad:'Es raro el inversor de mercados públicos que tiene el privilegio de invertir capital de verdadero largo plazo.' },
+  { tono:'retomar', autor:'Bill Ackman', fuente:'Carta anual Pershing Square Holdings, 2018',
+    texto:'As I have often said, experience is making mistakes and learning from them, and learn we have done.',
+    trad:'Como he dicho a menudo, la experiencia es cometer errores y aprender de ellos, y aprender es lo que hemos hecho.' },
+  { tono:'retomar', autor:'Bill Ackman', fuente:'Carta anual Pershing Square Holdings, 2018',
+    texto:'We have found a strategy that works, so we intend to stick to it.',
+    trad:'Encontramos una estrategia que funciona, así que pensamos mantenernos en ella.' },
+  { tono:'retomar', autor:'Bai Gui (白圭), vía Sima Qian', fuente:'Shiji, "Biografías de los mercaderes"', lang:'zh',
+    texto:'人弃我取，人取我与',
+    trad:'Tomá lo que otros descartan, dá lo que otros buscan.' }
+];
+
 // ⚠ Mismo motivo: usada por renderAnalisis(), llamada también desde esa
 // cadena síncrona (renderAll() -> renderAnalisis()).
 let analisisView = 'torta';
@@ -3293,6 +3326,40 @@ function elegirMensajeDelDia(pool) {
   return pool[diaDelAnio % pool.length];
 }
 
+// Nivel de énfasis visual del banner según días de ausencia (1 leve … 4 fuerte).
+function nivelAusencia(dias) {
+  return dias < 30 ? 1 : dias < 60 ? 2 : dias < 90 ? 3 : 4;
+}
+
+// Cita del día para el banner de ausencia. Misma rotación determinística que
+// elegirMensajeDelDia. Con ≥30 días solo entran citas 'retomar' (ver CITAS_AUSENCIA).
+function elegirCitaDelDia(dias) {
+  const pool = CITAS_AUSENCIA.filter(c => dias < 30 || c.tono === 'retomar');
+  if (!pool.length) return null;
+  const diaDelAnio = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86400000);
+  return pool[diaDelAnio % pool.length];
+}
+
+function escHtmlCita(t) {
+  return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function htmlCitaAusencia(dias) {
+  const c = elegirCitaDelDia(dias);
+  if (!c) return '';
+  const nivel = nivelAusencia(dias);
+  const tam = [13, 14, 15, 16][nivel - 1];
+  const grosor = nivel >= 3 ? 700 : 500;
+  const fondo = nivel >= 2 ? 'background:var(--red-bg);' : '';
+  const orig = c.lang === 'zh' ? `<span lang="zh">${escHtmlCita(c.texto)}</span>` : `<i>${escHtmlCita(c.texto)}</i>`;
+  return `
+    <blockquote style="margin:10px 0 0;padding:8px 12px;border-left:3px solid var(--red);${fondo}border-radius:0 6px 6px 0">
+      <div style="font-size:${tam}px;font-weight:${grosor};color:var(--text-primary);line-height:1.4">“${escHtmlCita(c.trad)}”</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:4px">Original: ${orig} · traducción libre</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:2px">— ${escHtmlCita(c.autor)} · ${escHtmlCita(c.fuente)}</div>
+    </blockquote>`;
+}
+
 function leerPoolMensajes(key) {
   try {
     return (localStorage.getItem(key) || '').split('\n').map(s => s.trim()).filter(Boolean);
@@ -3382,7 +3449,8 @@ function renderBannerConsistencia() {
     cont.style.borderColor = 'var(--red)';
     cont.innerHTML = `
       <div style="font-size:9px;color:var(--red);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">⚠ ${gapDias} días sin actividad (última: ${fechaFmt})</div>
-      ${msg ? `<div style="font-size:13px;color:var(--text-primary)">${msg.replace(/</g,'&lt;')}</div>` : `<div style="font-size:11px;color:var(--text-muted)">Escribí tu propio mensaje de ausencia en ⚙ Config.</div>`}`;
+      ${msg ? `<div style="font-size:13px;color:var(--text-primary)">${msg.replace(/</g,'&lt;')}</div>` : `<div style="font-size:11px;color:var(--text-muted)">Escribí tu propio mensaje de ausencia en ⚙ Config.</div>`}
+      ${htmlCitaAusencia(gapDias)}`;
   } else if (racha >= umbralRacha) {
     const msg = elegirMensajeDelDia(leerPoolMensajes('pei_mensajes_racha'));
     cont.style.borderColor = 'var(--green)';
