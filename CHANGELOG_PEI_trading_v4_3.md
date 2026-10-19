@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-10-19 (sesión Cowork, 5ta — RGBI/OFZ ruso vía MOEX ISS en tab Bonos)
+**Última actualización:** 2026-10-19 (sesión Cowork, 5ta — RGBI/OFZ ruso + fix proxy CORS por defecto y caché de snapshots incompletos)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -45,7 +45,7 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 
 ---
 
-## Sesión 2026-10-19 (Cowork, 5ta) — RGBI/OFZ ruso vía MOEX ISS en tab Bonos — CERRADA, commit local sin pushear
+## Sesión 2026-10-19 (Cowork, 5ta) — RGBI/OFZ ruso vía MOEX ISS en tab Bonos + fix Yahoo sin datos — commits locales sin pushear
 
 Retomando el pendiente de 🟡 Media prioridad (bonos globales, 18/09): de los cuatro candidatos (Bund, JGB, Gilt, Rusia, China), el OFZ ruso vía MOEX ISS era el único validado al 100% contra el código real en la sesión del 18/09 (3ra) -- `fetchMOEX()` ya pega directo a `iss.moex.com` sin proxy CORS. Pedro confirmó arrancar por ahí ("arranca si, prosigue").
 
@@ -53,7 +53,9 @@ Retomando el pendiente de 🟡 Media prioridad (bonos globales, 18/09): de los c
 
 **Nota sobre el endpoint de MOEX ISS:** no distingue mercado abierto/cerrado en los campos pedidos (`marketdata`), así que el `status` queda fijo en `'closed'` cuando hay dato -- mismo criterio de cadencia diaria que ya tiene el resto de Bonos, no es una limitación nueva.
 
-**Pendiente de testear (no verificado en vivo todavía):** tanto el sandbox de Claude como el Mac de Pedro bloquean `iss.moex.com` por política de red (mismo bloqueo que ya afectaba pruebas de CORS con `curl` en sesiones anteriores) -- no se pudo confirmar en esta sesión que el board `SNDX` sea el correcto para `RGBI` (si no lo es, el fallback sin board debería encontrarlo igual, pero falta la prueba real en el browser de Pedro). **Pedro: abrir el tab Bonos y confirmar que la card de RGBI muestra un precio real** (no "—" ni "SIN DATOS") antes de dar esto por cerrado del todo.
+**Verificado en vivo por Pedro (19/10, capturas):** la card de RGBI muestra 111,69 pts, fuente MOEX ISS, badge CERRADO. (El sandbox de Claude y el Mac bloquean `iss.moex.com` por red, así que la prueba real fue en el browser de Pedro.) Var. semana queda en "—" hasta juntar 5+ días de historial, esperado.
+
+**Bug real encontrado el mismo día (commit `e978950`) -- Commodities/Bonos/Índices sin datos:** Pedro abrió el dashboard y Commodities, 7 de 8 cards de Bonos y 3 Índices (HSTECH/CSI300/MOEX, ESTÁTICO) no mostraban nada. Dos causas combinadas: (1) la URL del Worker de Cloudflare (`pei-cors-proxy.pzacarias18.workers.dev`) vivía SOLO en `localStorage` -- cada navegador/origen arranca con el campo vacío y Yahoo bloquea por CORS. Ahora `PROXY_CORS_DEFAULT` está en el código (arriba de `restoreCSV()`, Lección #1), como las keys de Finnhub/Twelve Data; el Worker tiene allowlist de hosts de Yahoo, no es proxy abierto. (2) **Bug de caché:** un fetch fallido guardaba igual un snapshot con todo en `null` y la lógica lo daba por "al día" (Bonos hasta mañana, Commodities 7 días) -- aunque se arreglara el proxy, recargar no reintentaba. Nuevo `snapshotCompleto()`: un snapshot sin precio en algún instrumento se reintenta en la próxima apertura de la tab, y un reintento fallido no pisa un dato bueno del mismo día. Efecto colateral aceptado: un ticker que Yahoo nunca devuelva (posible con `HRC=F`, acero) hace que esa tab refetchee en cada apertura -- si pasa, evaluar sacarlo de la config. **Lección:** un fallo transitorio nunca debe quedar cacheado como dato válido.
 
 Quedan pendientes, sin fuente gratuita confirmada: CGB chino (Sina Finance, CORS sin probar), JGB japonés (solo yield, sin fuente confirmada), Bund alemán y Gilt UK (sin fuente viable todavía).
 
@@ -207,7 +209,8 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — al día con `main` hasta el fix del badge ESTÁTICO/CERRADO (pusheado 14/09). ✅ Pusheados los 8 commits pendientes (Commodities, Bonos, mini-gráficos, Triple Witching y sus CHANGELOGs) -- confirmado 18/09, main en GitHub queda en 43d5660.
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
-- ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. Sin verificar en vivo todavía (ver Pendientes).
+- ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
+- ✅ **Proxy CORS con valor por defecto en el código + reintento de snapshots incompletos (19/10):** Commodities/Bonos/Índices ya no dependen de que el proxy esté cargado en `localStorage`. Falta confirmación en vivo de Pedro tras recargar.
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
 - ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · Earnings · **Histórico (nuevo 08/09)** · ⚙ Config
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
@@ -239,8 +242,9 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
-- [x] ~~OFZ ruso (RGBI) vía MOEX ISS~~ — **integrado 19/10** (5ta sesión), ver Estado actual. Falta solo que Pedro confirme en el browser que la card muestra precio real (el sandbox no pudo probar el fetch en vivo, bloqueo de red).
+- [x] ~~OFZ ruso (RGBI) vía MOEX ISS~~ — **integrado 19/10** (5ta sesión), ver Estado actual. Verificado en vivo por Pedro (111,69 pts, CERRADO).
 - [ ] **Bonos globales restantes (Bund, JGB, Gilt, China)** — pedido explícito de Pedro (18/09). **CGB chino vía Sina Finance — dato real, falta confirmar CORS** (Pedro prueba el fetch a mano en su navegador antes de sumarlo). **JGB japonés vía J-Quants — el free tier NO incluye futuros** (solo Premium pago); si se quiere, sería solo el yield vía otra fuente sin confirmar cobertura todavía. **Bund y Gilt siguen sin fuente gratuita viable.**
+- [ ] **Banner de ausencia con citas de grandes del mundo financiero (idea de Pedro, 19/10)** — pendiente de arrancar. Esquema acordado a medias: (1) research con fuente primaria ANTES de tocar código (Buffett, Ackman y figuras de EE.UU./Rusia/China; solo citas verificables con autor+año+fuente; si el pool ruso/chino es flaco se dice, no se rellena con apócrifas); (2) Pedro aprueba la lista cita por cita; (3) lista fija en el código (sin API de Anthropic, para que no invente atribuciones), por tramos de días sin operar con más énfasis visual a mayor ausencia; (4) los mensajes propios de Pedro (Config) mantienen prioridad -- decisión de diseño original "el dashboard solo los entrega". **Ojo previo:** el banner hoy marca "124 días sin actividad" por el CSV/bitácora desactualizado (trades de agosto sin cargar), no por falta real de actividad -- cargar agosto primero, o el énfasis amplifica una falsa alarma. Pedro mencionó trabajarlo mientras opera/mira el mercado.
 - [ ] **Commodities en 0,00 (WTI/BRENT/COPPER/NATGAS) y RVOL en 0.0x/sin datos** — hipótesis: límite del plan gratis de Twelve Data (símbolos de futuros y/o volumen real no incluidos en Basic). Pedro: probar en el navegador y reportar qué devuelven —
   1. `https://api.twelvedata.com/quote?symbol=WTI/USD,BRENT/USD,COPPER/USD,NATGAS/USD&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿precios reales o error "symbol not found"/plan pago?)
   2. `https://api.twelvedata.com/time_series?symbol=SPY&interval=1day&outputsize=21&apikey=3e257ff3e9e14bd6bb24f2d7bd0e57c3` (¿el campo `"volume"` de cada barra viene con números reales o en `"0"`?)
