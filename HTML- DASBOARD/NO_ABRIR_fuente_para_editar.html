@@ -852,6 +852,16 @@ body {
         <option value="cmc live">CMC Live</option>
         <option value="mt5 live">MT5 Live</option>
       </select>
+      <label for="selector-clase" style="color:var(--text-muted);font-size:11px;letter-spacing:.05em;text-transform:uppercase;margin-left:12px">Clase:</label>
+      <select id="selector-clase" style="background:var(--bg-card);color:var(--text-primary);border:1px solid var(--border);border-radius:4px;padding:5px 10px;font-size:12px;font-family:'DM Mono',monospace">
+        <option value="todas">Todas</option>
+        <option value="forex">Forex</option>
+        <option value="indice">Índices</option>
+        <option value="accion">Acciones</option>
+        <option value="bono">Bonos</option>
+        <option value="commodity">Commodities</option>
+        <option value="otro">Sin clasificar</option>
+      </select>
     </div>
 
     <!-- Consistencia del gestor: banner racha/ausencia + bitácora de análisis -->
@@ -1440,6 +1450,21 @@ body {
         <div class="config-hint">Se guardan en este navegador, igual que las API keys. El dashboard nunca escribe ni edita estos mensajes — solo los muestra cuando se cumple la condición que configuraste arriba.</div>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Clase de activo</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">se deduce del nombre; acá la corregís</span>
+      </div>
+      <div style="padding:8px 0">
+        <div id="cfg-clase-lista"></div>
+        <div style="display:flex;gap:10px;align-items:center;margin-top:8px">
+          <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigClases()">Guardar</button>
+          <span id="cfg-clase-status" style="font-size:11px;color:var(--green)"></span>
+        </div>
+        <div class="config-hint">Forex se detecta por par de monedas (EUR/USD, AUD-JPY, USDMXN); índices, commodities y bonos por nombre conocido. Todo lo demás queda "Sin clasificar" hasta que lo asignes (por ejemplo, una acción). El filtro "Clase" del Overview afecta KPIs, equity, métricas y resúmenes; el archivo histórico y el puente PEI·SYS siguen usando todos los trades. Se guarda en este navegador.</div>
+      </div>
+    </div>
   </div>
 
 </div>
@@ -1590,6 +1615,7 @@ function initConfigTab() {
   if (urEl) urEl.value = localStorage.getItem('pei_umbral_racha_semanas') || '3';
   if (maEl) maEl.value = localStorage.getItem('pei_mensajes_ausencia') || '';
   if (mrEl) mrEl.value = localStorage.getItem('pei_mensajes_racha') || '';
+  renderConfigClases();
 }
 
 function guardarConfigConsistencia() {
@@ -1983,6 +2009,22 @@ let chartRollingRisk = null;
 const ROLLING_RISK_VENTANA = 3;
 // Triple witching: desde cuántos días antes empieza a destacarse el banner.
 const TRIPLE_WITCHING_AVISO_DIAS = 3;
+// Clase de activo (forex / índices / acciones / bonos / commodities): se deduce del nombre del
+// activo (auto-detección + mapa editable en Config), sin columna nueva en el CSV.
+const CLASE_LABELS = { forex:'Forex', indice:'Índices', accion:'Acciones', bono:'Bonos', commodity:'Commodities', otro:'Sin clasificar' };
+const CLASE_MAP_KEY = 'pei_clase_map';
+const FOREX_MONEDAS = ['usd','eur','gbp','jpy','aud','nzd','cad','chf','mxn','brl','zar','try','sek','nok','dkk','pln','czk','huf','sgd','hkd','cnh','cny','inr','rub','ars'];
+const CLASE_KEYWORDS = {
+  indice: ['spx','sp500','spy500','us500','ndx','nas100','nasdaq','dji','dow','us30','us100','rut','rty','russel','russell','us2000','dax','ger40','ger30','ftse','uk100','cac','fra40','nikkei','n225','jp225','hstech','hsi','hk50','csi300','moex','imoex','rtsi','sox','stoxx','ibex','vix','merval','ibov','bovespa'],
+  commodity: ['brent','wti','crude','oil','petroleo','gold','oro','xau','xauusd','silver','plata','xag','xagusd','copper','cobre','natgas','wheat','trigo','corn','maiz','soja','soy','cl','gc','si','hg','ng','zw','zc','zs'],
+  bono: ['bond','bono','bund','gilt','jgb','ofz','rgbi','treasury','tnote','tbond','t30a7','tnx','fvx','tyx','ust','zn','zb','zt','zf','us10y','us02y','us30y']
+};
+let claseActivaFiltro = (() => {
+  try {
+    const v = localStorage.getItem('pei_clase_activa');
+    return (v === 'todas' || (v && CLASE_LABELS[v])) ? v : 'todas';
+  } catch (e) { return 'todas'; }
+})();
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -2085,8 +2127,87 @@ function col(trade, ...names) {
 }
 
 function getTradesFiltrados() {
-  if (cuentaActiva === 'todas') return trades;
-  return trades.filter(t => String(col(t,'cuenta') || '').toLowerCase().includes(cuentaActiva.toLowerCase()));
+  let arr = trades;
+  if (cuentaActiva !== 'todas') {
+    arr = arr.filter(t => String(col(t,'cuenta') || '').toLowerCase().includes(cuentaActiva.toLowerCase()));
+  }
+  if (claseActivaFiltro !== 'todas') {
+    arr = arr.filter(t => claseDeActivo(col(t,'activo')) === claseActivaFiltro);
+  }
+  return arr;
+}
+
+// ── Clase de activo ──────────────────────────────────────────────────────
+function escHtmlGen(t) {
+  return String(t == null ? '' : t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 'USD/JPY', 'aud-jpy', 'Russel 2000' -> 'usdjpy', 'audjpy', 'russel2000'
+function normalizarActivo(nombre) {
+  return String(nombre || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+// Deducción automática por nombre (sin mapa del usuario).
+function claseAuto(nombre) {
+  const n = normalizarActivo(nombre);
+  if (!n) return 'otro';
+  if (n.length === 6 && FOREX_MONEDAS.includes(n.slice(0,3)) && FOREX_MONEDAS.includes(n.slice(3))) return 'forex';
+  for (const clase of ['indice', 'commodity', 'bono']) {
+    for (const k of CLASE_KEYWORDS[clase]) {
+      if (n === k || (k.length >= 4 && n.startsWith(k))) return clase;
+    }
+  }
+  return 'otro';
+}
+
+function leerMapaClases() {
+  try {
+    const m = JSON.parse(localStorage.getItem(CLASE_MAP_KEY) || '{}');
+    return (m && typeof m === 'object') ? m : {};
+  } catch (e) { return {}; }
+}
+
+// El mapa que editás en Config tiene prioridad sobre la auto-detección.
+function claseDeActivo(nombre) {
+  const n = normalizarActivo(nombre);
+  const mapa = leerMapaClases();
+  if (n && mapa[n] && CLASE_LABELS[mapa[n]]) return mapa[n];
+  return claseAuto(nombre);
+}
+
+function renderConfigClases() {
+  const cont = document.getElementById('cfg-clase-lista');
+  if (!cont) return;
+  const vistos = new Map(); // normalizado -> nombre tal cual figura
+  trades.forEach(t => {
+    const nom = String(col(t, 'activo') || '').trim();
+    const n = normalizarActivo(nom);
+    if (n && !vistos.has(n)) vistos.set(n, nom);
+  });
+  if (!vistos.size) {
+    cont.innerHTML = `<div class="config-hint">Cargá el CSV de trades para ver los activos y asignarles clase.</div>`;
+    return;
+  }
+  cont.innerHTML = [...vistos.entries()].sort((a,b) => a[1].localeCompare(b[1])).map(([n, nom]) => {
+    const actual = claseDeActivo(nom);
+    const opts = Object.keys(CLASE_LABELS).map(c =>
+      `<option value="${c}"${c === actual ? ' selected' : ''}>${CLASE_LABELS[c]}</option>`).join('');
+    return `<div class="config-row"><label class="config-label">${escHtmlGen(nom)}</label>
+      <select class="config-input" data-clase-activo="${escHtmlGen(n)}" data-nombre="${escHtmlGen(nom)}">${opts}</select></div>`;
+  }).join('');
+}
+
+function guardarConfigClases() {
+  const mapa = {};
+  document.querySelectorAll('#cfg-clase-lista select[data-clase-activo]').forEach(sel => {
+    const n = sel.getAttribute('data-clase-activo');
+    // Solo se guarda lo que difiere de la auto-detección: lo demás sigue automático.
+    if (sel.value !== claseAuto(sel.getAttribute('data-nombre'))) mapa[n] = sel.value;
+  });
+  try { localStorage.setItem(CLASE_MAP_KEY, JSON.stringify(mapa)); } catch (e) {}
+  renderAll();
+  const st = document.getElementById('cfg-clase-status');
+  if (st) { st.textContent = `✓ Guardado ${new Date().toLocaleTimeString('es-AR')}`; setTimeout(() => { st.textContent = ''; }, 4000); }
 }
 
 function renderAll() {
@@ -4057,6 +4178,16 @@ function initAutoSync() {
     selCuenta.addEventListener('change', function(e) {
       cuentaActiva = e.target.value;
       try { localStorage.setItem('pei_cuenta_activa', cuentaActiva); } catch(err) {}
+      renderAll();
+    });
+  }
+
+  const selClase = document.getElementById('selector-clase');
+  if (selClase) {
+    selClase.value = claseActivaFiltro;
+    selClase.addEventListener('change', function(e) {
+      claseActivaFiltro = e.target.value;
+      try { localStorage.setItem('pei_clase_activa', claseActivaFiltro); } catch(err) {}
       renderAll();
     });
   }
