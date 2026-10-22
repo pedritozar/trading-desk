@@ -107,5 +107,6 @@ Pedro preguntó si la Data API de GuruFocus le sirve. Research (WebFetch/WebSear
 - Lo exclusivo es GF Score/GF Value; los 13F de gurús y los Form 4 de insiders son públicos y gratuitos en SEC EDGAR.
 - Decisión de Pedro (22/10): llevarlo al chat de Cifra (cifra.html). En el trading-desk solo se sumaron links de salida por ticker. Si se integra: Worker propio con el token como secreto (nunca en el HTML de un repo público), cache con TTL largo, contador de cuota con tope, botón manual de actualización y carga manual como respaldo.
 - Antes de cualquier código: leer el Data API Agreement.
+- Aclaración (22/10, capturas de Pedro): el chat de Cifra plantea GuruFocus con un SCRIPT APARTE que cruce cifras SEC + GuruFocus (Cifra no hace llamadas de red ni usa keys; congelado hasta cerrar SPCX 3Q26) y una pestaña "Cruce" más adelante. Reemplaza la idea de Worker + cache dentro del HTML de Cifra. La regla del token como secreto sigue valiendo si algún dashboard con red llegara a consumir esta API. Nada de esto va en trading-desk.
 
 Fuentes: https://www.gurufocus.com/data-api/pricing · https://www.gurufocus.com/news/8790080/gurufocus-data-api-build-on-data-no-other-api-has · https://www.gurufocus.com/data-api/mcp · https://Gurufocus.com/api/guru-insider-data · https://gurufocus.com/data/subscription
