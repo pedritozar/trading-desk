@@ -833,6 +833,7 @@ body {
   <button class="nav-btn" onclick="showTab('bonos', this); if(!bonosLoaded) initBonosTab();">Bonos</button>
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
   <button class="nav-btn" onclick="showTab('historico', this); if(!historicoLoaded) initHistoricoTab();">Histórico</button>
+  <button class="nav-btn" onclick="showTab('escenarios', this); renderEscenarios();">Escenarios</button>
   <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
 </div>
 
@@ -1390,6 +1391,57 @@ body {
   </div>
 
   <!-- ══ CONFIG TAB ══ -->
+  <!-- ══ ESCENARIOS TAB ══ -->
+  <div id="tab-escenarios" class="tab-content">
+    <div class="section-title">Escenarios</div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Nuevo escenario</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">se guarda en Firestore (colección escenarios)</span>
+      </div>
+      <div style="padding:8px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px">
+        <div><label class="config-label" for="esc-activo">Activo *</label>
+          <input id="esc-activo" class="config-input" placeholder="SPX, EUR/USD, AAPL..." onchange="sugerirClaseEscenario()"></div>
+        <div><label class="config-label" for="esc-clase">Clase</label><select id="esc-clase" class="config-input"></select></div>
+        <div><label class="config-label" for="esc-tf">Temporalidad</label><select id="esc-tf" class="config-input"></select></div>
+        <div><label class="config-label" for="esc-sesgo">Sesgo</label>
+          <select id="esc-sesgo" class="config-input">
+            <option value="alcista">Alcista</option><option value="bajista">Bajista</option><option value="neutral">Neutral</option>
+          </select></div>
+      </div>
+      <div style="padding:0 0 8px 0;max-width:none">
+        <label class="config-label" for="esc-tesis">Tesis * (qué esperás que pase y por qué)</label>
+        <textarea id="esc-tesis" class="config-input" rows="3" placeholder="Estructura, patrón, contexto macro..."></textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;padding-bottom:8px">
+        <div><label class="config-label" for="esc-entrada">Entrada (nivel o zona)</label><input id="esc-entrada" class="config-input" placeholder="5850-5900"></div>
+        <div><label class="config-label" for="esc-invalidacion">Invalidación * (qué la anula)</label><input id="esc-invalidacion" class="config-input" placeholder="Cierre diario bajo 5780"></div>
+        <div><label class="config-label" for="esc-objetivo">Objetivo</label><input id="esc-objetivo" class="config-input" placeholder="6050"></div>
+        <div><label class="config-label" for="esc-link">Link TradingView</label><input id="esc-link" class="config-input" placeholder="https://www.tradingview.com/..."></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarEscenario()">Guardar escenario</button>
+        <span id="esc-status" style="font-size:11px"></span>
+      </div>
+      <div class="config-hint">La invalidación es obligatoria a propósito: un escenario sin condición que lo anule no se puede medir después.</div>
+    </div>
+
+    <div style="margin:16px 0 8px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+      <select class="config-input" style="width:auto" onchange="setFiltroEscenarios('estado', this.value)">
+        <option value="vigente">Vigentes</option><option value="cumplido">Cumplidos</option>
+        <option value="invalidado">Invalidados</option><option value="archivado">Archivados</option><option value="todos">Todos (sin archivados)</option>
+      </select>
+      <select class="config-input" style="width:auto" onchange="setFiltroEscenarios('clase', this.value)">
+        <option value="todas">Todas las clases</option><option value="forex">Forex</option><option value="indice">Índices</option>
+        <option value="accion">Acciones</option><option value="bono">Bonos</option><option value="commodity">Commodities</option><option value="otro">Sin clasificar</option>
+      </select>
+      <input class="config-input" style="width:180px" placeholder="Buscar activo" oninput="setFiltroEscenarios('texto', this.value)">
+      <span id="esc-resumen" style="font-size:11px;color:var(--text-muted);font-family:'DM Mono',monospace"></span>
+      <span id="esc-lista-status" style="font-size:11px;color:var(--red)"></span>
+    </div>
+    <div id="esc-lista"></div>
+  </div>
+
   <div id="tab-config" class="tab-content">
     <div class="section-title">Config — API Keys</div>
     <div class="card" style="margin-top:16px">
@@ -2025,6 +2077,13 @@ let claseActivaFiltro = (() => {
     return (v === 'todas' || (v && CLASE_LABELS[v])) ? v : 'todas';
   } catch (e) { return 'todas'; }
 })();
+// Escenarios (tab Escenarios, colección Firestore 'escenarios'): cargados async por
+// initEscenarios() en DOMContentLoaded.
+const ESC_ESTADOS = { vigente:'Vigente', cumplido:'Cumplido', invalidado:'Invalidado', archivado:'Archivado' };
+const ESC_SESGOS = { alcista:'Alcista', bajista:'Bajista', neutral:'Neutral' };
+const ESC_TEMPORALIDADES = ['15m','1H','4H','D1','W1','M1'];
+let escenariosData = [];
+let escenariosFiltro = { clase: 'todas', estado: 'vigente', texto: '' };
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -3408,6 +3467,141 @@ function renderBitacoraAnalisis() {
       <span style="color:var(--text-muted);font-family:'DM Mono',monospace">${new Date(e.fecha).toLocaleDateString('es-AR')}</span>
       <span style="margin-left:8px">${(e.texto || '').replace(/</g,'&lt;')}</span>
     </div>`).join('');
+}
+
+// ══════════════════════════════════════
+// ESCENARIOS — análisis estructurados (activo, tesis, niveles, invalidación, estado)
+// Colección Firestore 'escenarios' (puente PEI·SYS). No toca 'bitacora_analisis'.
+// ══════════════════════════════════════
+async function initEscenarios() {
+  const sel = document.getElementById('esc-clase');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = Object.keys(CLASE_LABELS).map(c => `<option value="${c}">${CLASE_LABELS[c]}</option>`).join('');
+  }
+  const tf = document.getElementById('esc-tf');
+  if (tf && !tf.options.length) {
+    tf.innerHTML = ESC_TEMPORALIDADES.map(t => `<option value="${t}"${t === 'D1' ? ' selected' : ''}>${t}</option>`).join('');
+  }
+  if (typeof window.peisysGetCollection !== 'function') { renderEscenarios(); return; }
+  try {
+    const col = await window.peisysGetCollection('escenarios');
+    escenariosData = Object.entries(col || {}).map(([id, e]) => Object.assign({ id }, e))
+      .sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0));
+  } catch (e) {
+    console.warn('initEscenarios: no se pudo cargar', e);
+  }
+  renderEscenarios();
+}
+
+// Al escribir el activo, sugiere la clase (la podés cambiar a mano).
+function sugerirClaseEscenario() {
+  const a = document.getElementById('esc-activo');
+  const c = document.getElementById('esc-clase');
+  if (a && c && a.value.trim()) c.value = claseDeActivo(a.value);
+}
+
+function setFiltroEscenarios(campo, valor) {
+  escenariosFiltro[campo] = valor;
+  renderEscenarios();
+}
+
+function linkSeguro(u) {
+  const t = String(u || '').trim();
+  return /^https?:\/\//i.test(t) ? t : '';
+}
+
+async function guardarEscenario() {
+  const v = id => (document.getElementById(id)?.value || '').trim();
+  const st = document.getElementById('esc-status');
+  const msg = (t, ok) => { if (st) { st.style.color = ok ? 'var(--green)' : 'var(--red)'; st.textContent = t; } };
+  const activo = v('esc-activo'), tesis = v('esc-tesis'), invalidacion = v('esc-invalidacion');
+  if (!activo || !tesis || !invalidacion) { msg('✕ Activo, tesis e invalidación son obligatorios', false); return; }
+  if (typeof window.peisysSetDoc !== 'function') { msg('✕ Puente PEI·SYS no disponible', false); return; }
+  const ahora = new Date().toISOString();
+  const id = Date.now().toString();
+  const e = {
+    creado: ahora, actualizado: ahora, activo,
+    clase: v('esc-clase') || claseDeActivo(activo), temporalidad: v('esc-tf'), sesgo: v('esc-sesgo') || 'neutral',
+    tesis, entrada: v('esc-entrada'), invalidacion, objetivo: v('esc-objetivo'),
+    link: linkSeguro(v('esc-link')), estado: 'vigente'
+  };
+  try {
+    await window.peisysSetDoc('escenarios', id, e);
+    escenariosData.unshift(Object.assign({ id }, e));
+    ['esc-activo','esc-tesis','esc-entrada','esc-invalidacion','esc-objetivo','esc-link'].forEach(i => { const el = document.getElementById(i); if (el) el.value = ''; });
+    msg(`✓ Guardado ${new Date().toLocaleTimeString('es-AR')}`, true);
+    renderEscenarios();
+  } catch (err) {
+    console.warn('guardarEscenario falló', err);
+    msg('✕ No se pudo guardar (revisá las reglas de Firestore)', false);
+  }
+}
+
+async function cambiarEstadoEscenario(id, estado) {
+  const e = escenariosData.find(x => x.id === id);
+  if (!e || !ESC_ESTADOS[estado] || typeof window.peisysSetDoc !== 'function') return;
+  const ahora = new Date().toISOString();
+  try {
+    await window.peisysSetDoc('escenarios', id, { estado, actualizado: ahora });
+    e.estado = estado; e.actualizado = ahora;
+    renderEscenarios();
+  } catch (err) {
+    console.warn('cambiarEstadoEscenario falló', err);
+    const st = document.getElementById('esc-lista-status');
+    if (st) st.textContent = '✕ No se pudo actualizar el estado';
+  }
+}
+
+function renderEscenarios() {
+  const cont = document.getElementById('esc-lista');
+  if (!cont) return;
+  const cuenta = k => escenariosData.filter(e => (e.estado || 'vigente') === k).length;
+  const cumpl = cuenta('cumplido'), inval = cuenta('invalidado');
+  const resumen = document.getElementById('esc-resumen');
+  if (resumen) {
+    const acierto = (cumpl + inval) > 0 ? ` · Acierto (cerrados): ${Math.round(cumpl / (cumpl + inval) * 100)}% de ${cumpl + inval}` : '';
+    resumen.textContent = `Vigentes ${cuenta('vigente')} · Cumplidos ${cumpl} · Invalidados ${inval}${acierto}`;
+  }
+  const f = escenariosFiltro;
+  const q = f.texto.trim().toLowerCase();
+  const lista = escenariosData.filter(e => {
+    const est = e.estado || 'vigente';
+    if (f.estado === 'vigente' && est !== 'vigente') return false;
+    if (f.estado !== 'vigente' && f.estado !== 'todos' && est !== f.estado) return false;
+    if (f.estado === 'todos' && est === 'archivado') return false;
+    if (f.clase !== 'todas' && (e.clase || 'otro') !== f.clase) return false;
+    if (q && !String(e.activo || '').toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if (!lista.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:12px 0">${escenariosData.length ? 'Ningún escenario coincide con el filtro.' : 'Sin escenarios todavía. Cargá el primero arriba.'}</div>`;
+    return;
+  }
+  const colSesgo = { alcista: 'var(--green)', bajista: 'var(--red)', neutral: 'var(--text-muted)' };
+  const campo = (lbl, val) => val ? `<div><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">${lbl}</div><div style="font-size:12px;font-family:'DM Mono',monospace">${escHtmlGen(val)}</div></div>` : '';
+  const btn = (id, est, txt) => `<button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px" onclick="cambiarEstadoEscenario('${escHtmlGen(id)}','${est}')">${txt}</button>`;
+  cont.innerHTML = lista.map(e => {
+    const est = e.estado || 'vigente';
+    const link = linkSeguro(e.link);
+    const acciones = est === 'vigente'
+      ? btn(e.id,'cumplido','✓ Cumplido') + btn(e.id,'invalidado','✕ Invalidado') + btn(e.id,'archivado','Archivar')
+      : btn(e.id,'vigente','Reabrir') + (est !== 'archivado' ? btn(e.id,'archivado','Archivar') : '');
+    return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${colSesgo[e.sesgo] || 'var(--border)'}">
+      <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+        <strong style="font-size:14px">${escHtmlGen(e.activo)}</strong>
+        <span class="badge">${escHtmlGen(CLASE_LABELS[e.clase] || 'Sin clasificar')}</span>
+        <span class="badge">${escHtmlGen(e.temporalidad || '')}</span>
+        <span style="font-size:11px;color:${colSesgo[e.sesgo] || 'var(--text-muted)'}">${escHtmlGen(ESC_SESGOS[e.sesgo] || '')}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${escHtmlGen(ESC_ESTADOS[est] || est)} · ${e.creado ? new Date(e.creado).toLocaleDateString('es-AR') : ''}</span>
+      </div>
+      <div style="font-size:12px;margin-bottom:10px;white-space:pre-wrap">${escHtmlGen(e.tesis)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:10px">
+        ${campo('Entrada', e.entrada)}${campo('Invalidación', e.invalidacion)}${campo('Objetivo', e.objetivo)}
+        ${link ? `<div><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">TradingView</div><a href="${escHtmlGen(link)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--blue)">abrir gráfico ↗</a></div>` : ''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${acciones}</div>
+    </div>`;
+  }).join('');
 }
 
 // Última fecha con actividad (trade cargado o entrada de bitácora), o null si no hay nada.
@@ -5542,6 +5736,7 @@ initAutoSync();
   window.addEventListener('DOMContentLoaded', () => {
     if (typeof window.actualizarResumenPEISYS === 'function') window.actualizarResumenPEISYS();
     initBitacoraAnalisis();
+    initEscenarios();
   });
 </script>
 </body>
