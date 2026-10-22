@@ -83,3 +83,29 @@ Pedro aprobó las candidatas de la Tanda 4 ("agrega esas que encontraste, rusia 
 - Rusia: queda AFUERA hasta que aparezca una cita relevante y verificada.
 - Quedan sin verificar del todo: Buffett 1990 (cotejada en transcripción, no en página oficial) y el texto chino de Bai Gui (no cotejado contra ctext.org). Marcados en comentario del código (CITAS_AUSENCIA).
 - Implementado en el banner de ausencia (ver CHANGELOG). Se agregó criterio propio de Claude, a validar por Pedro: las citas que elogian esperar/no operar (Buffett, Lefèvre, Ackman "long duration") solo salen con <30 días de ausencia; con ≥30 días salen solo las de "retomar el proceso" (Ackman x2, Bai Gui), para que no funcionen como permiso para seguir sin operar.
+
+═══════════════════════════════════════
+GURUFOCUS DATA API -- EVALUACIÓN (2026-10-22)
+═══════════════════════════════════════
+Pedro preguntó si la Data API de GuruFocus le sirve. Research (WebFetch/WebSearch del 21/10; la propia nota de lanzamiento de GuruFocus es promocional, sus afirmaciones de exclusividad no están verificadas por terceros).
+
+### Qué ofrece
+- API REST, respuestas JSON, 13 endpoints. 60.000+ empresas en 9 regiones; fundamentales y valuaciones desde 1978. Propio de ellos: posiciones y operaciones de 17.000+ inversores institucionales ("gurús"), insiders, GF Score (0-100) y GF Value. También noticias EE. UU. (60 días), ETFs, fondos mutuos, datos económicos y un servidor MCP.
+- Ejemplos de ruta vistos: GET https://api.gurufocus.com/data/stocks/{region}?page=1&per_page=100 y .../data/stocks/AAPL/rankings, con header Authorization.
+
+### Planes (página de pricing, 21/10)
+- Free $0: 100 requests/mes. Builder $200/mes facturado anualmente (sin tope mensual, excedente por request). Commercial $2.000/mes facturado anualmente (derechos de redistribución). Regiones extra +$100/+$200 por mes (Latinoamérica +$100); add-ons +$90.
+- Pay As You Go: recarga inicial $100; Fundamentals/Valuations/Guru Trades/Stock Insider Tradings $0,10 por request; SEC Filings $0,01; News $0,02.
+
+### Qué NO se pudo verificar
+- Texto del Data API Agreement (hay que aceptarlo para el Free); alcance de "Redistribution rights" / "Commercial Scope". Las cotizaciones vienen de QuoteMedia y los fundamentales de FactSet: probable restricción de redistribución -- relevante si se muestra en una página pública.
+- Si acepta llamadas directas desde el navegador (CORS); documentación por endpoint (las URLs de docs redirigen al pricing); límites por segundo; si las llamadas del MCP cuentan contra la cuota; si Argentina entra en "Latinoamérica".
+- Si los 100 requests del Free alcanzan para uso real (la página lo presenta como plan para explorar; una nota del proveedor da otra escala por membresía).
+
+### Veredicto y decisión
+- Para el trading discrecional en forex no aporta (es API de acciones, sin precios en vivo ni forex). Para análisis fundamental de empresas (Cifra, Excel corporativos) puede servir con el plan Free; no se justifica el Builder.
+- Lo exclusivo es GF Score/GF Value; los 13F de gurús y los Form 4 de insiders son públicos y gratuitos en SEC EDGAR.
+- Decisión de Pedro (22/10): llevarlo al chat de Cifra (cifra.html). En el trading-desk solo se sumaron links de salida por ticker. Si se integra: Worker propio con el token como secreto (nunca en el HTML de un repo público), cache con TTL largo, contador de cuota con tope, botón manual de actualización y carga manual como respaldo.
+- Antes de cualquier código: leer el Data API Agreement.
+
+Fuentes: https://www.gurufocus.com/data-api/pricing · https://www.gurufocus.com/news/8790080/gurufocus-data-api-build-on-data-no-other-api-has · https://www.gurufocus.com/data-api/mcp · https://Gurufocus.com/api/guru-insider-data · https://gurufocus.com/data/subscription
