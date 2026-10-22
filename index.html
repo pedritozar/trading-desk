@@ -1969,6 +1969,20 @@ let trades = [];
 // puede correr sincrónicamente durante el parseo inicial del script vía la IIFE
 // restoreCSV() de más abajo -- Lección #1 del CHANGELOG (TDZ), no repetir el error.
 let bitacoraAnalisisData = [];
+
+// ── Declaraciones previas a restoreCSV() (Lección #1 TDZ, 3ra vez: 19-22/10/2026) ──
+// Todo lo que use cualquier función de la cadena renderAll() va ACÁ, no junto a su función.
+// Instancias Chart.js: se destruyen y recrean en cada render (Chart.js no soporta
+// re-crear sobre el mismo canvas sin destroy() previo; renderAll() corre seguido).
+let chartEquity = null;
+let chartActivoBars = null;
+let chartHistorico = null;
+let chartRollingRisk = null;
+// Ventana (meses) del Sharpe/Volatilidad "rolling" -- 3 en vez de 12 por la poca historia
+// archivada (ver tab Histórico); subirla cuando haya más meses.
+const ROLLING_RISK_VENTANA = 3;
+// Triple witching: desde cuántos días antes empieza a destacarse el banner.
+const TRIPLE_WITCHING_AVISO_DIAS = 3;
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -2141,17 +2155,8 @@ function set(id, val) {
   if (el) el.textContent = val;
 }
 
-// Chart.js: instancias globales (se destruyen y recrean en cada render -- patron
-// necesario porque Chart.js no soporta re-crear sobre el mismo canvas sin destroy()
-// previo, y renderAll() se llama seguido por cambios de filtro/CSV).
-let chartEquity = null;
-let chartActivoBars = null;
-let chartHistorico = null;
-let chartRollingRisk = null;
-// Ventana (en meses) para el Sharpe/Volatilidad "rolling" de la cuenta real -- 3 en vez
-// de 12 (estándar institucional) porque la bitácora recién tiene unos meses de historia
-// (ver tab Histórico); a medida que se acumulen más meses archivados esto se puede subir.
-const ROLLING_RISK_VENTANA = 3;
+// (instancias Chart.js y ROLLING_RISK_VENTANA: declaradas arriba de restoreCSV(), ver
+// bloque 'Declaraciones previas a restoreCSV' -- Lección #1 TDZ)
 
 function cssVar(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -3377,7 +3382,7 @@ function leerPoolMensajes(key) {
 // esos días y el rango intradía se expandió ~7% -- es mecánica de rebalanceo forzado de
 // posiciones que vencen, no una señal direccional.
 // ═══════════════════════════════════════
-const TRIPLE_WITCHING_AVISO_DIAS = 3; // desde cuántos días antes empieza a destacarse
+// (TRIPLE_WITCHING_AVISO_DIAS = 3, declarada arriba de restoreCSV() -- Lección #1 TDZ)
 
 function tercerViernes(year, month) {
   const d = new Date(year, month, 1);
