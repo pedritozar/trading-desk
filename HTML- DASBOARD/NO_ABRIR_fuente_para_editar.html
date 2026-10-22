@@ -1069,6 +1069,17 @@ body {
       </div>
     </div>
 
+    <!-- Duración de trades -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-title">
+        <span>Duración de trades</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">respeta Cuenta y Clase del Overview</span>
+      </div>
+      <div id="metricas-duracion">
+        <div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Cargá el CSV para ver duración</div>
+      </div>
+    </div>
+
     <!-- Resumen mensual / anual -->
     <div class="card" style="margin-bottom:16px">
       <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
@@ -1396,6 +1407,21 @@ body {
     <div class="section-title">Escenarios</div>
     <div class="card" style="margin-top:16px">
       <div class="card-title">
+        <span>Abrir ticker</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">sin API: abre el sitio en otra pestaña</span>
+      </div>
+      <div style="padding:8px 0;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+        <input id="tk-input" class="config-input" style="width:170px" placeholder="AAPL, SPY, ^GSPC" onkeydown="if(event.key==='Enter') abrirTicker('tv')">
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 12px" onclick="abrirTicker('tv')">TradingView ↗</button>
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 12px" onclick="abrirTicker('finviz')">Finviz ↗</button>
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 12px" onclick="abrirTicker('sec')">SEC EDGAR ↗</button>
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 12px" onclick="abrirTicker('yahoo')">Yahoo Finance ↗</button>
+        <span id="tk-status" style="font-size:11px;color:var(--red)"></span>
+      </div>
+      <div class="config-hint">Finviz y SEC EDGAR cubren acciones de EE. UU. Para índices usá el símbolo de cada sitio (SPX en TradingView, ^GSPC en Yahoo).</div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
         <span>Nuevo escenario</span>
         <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">se guarda en Firestore (colección escenarios)</span>
       </div>
@@ -1514,7 +1540,7 @@ body {
           <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarConfigClases()">Guardar</button>
           <span id="cfg-clase-status" style="font-size:11px;color:var(--green)"></span>
         </div>
-        <div class="config-hint">Forex se detecta por par de monedas (EUR/USD, AUD-JPY, USDMXN); índices, commodities y bonos por nombre conocido. Todo lo demás queda "Sin clasificar" hasta que lo asignes (por ejemplo, una acción). El filtro "Clase" del Overview afecta KPIs, equity, métricas y resúmenes; el archivo histórico y el puente PEI·SYS siguen usando todos los trades. Se guarda en este navegador.</div>
+        <div class="config-hint">Forex se detecta por par de monedas (EUR/USD, AUD-JPY, USDMXN); índices, commodities y bonos por nombre conocido. Todo lo demás queda "Sin clasificar" hasta que lo asignes (por ejemplo, una acción). El filtro "Clase" (igual que el de Cuenta) afecta KPIs, equity, tabla de Trades, barras por activo, resumen por sistema, resumen mensual/anual, meta de cuenta, duración y distribución. NO afecta Rachas, Drawdown, TESLA/MALETA, Sesgo por Activo, Prop Firm, Kelly, el calendario, el archivo histórico ni el puente PEI·SYS: esos usan todos los trades. Se guarda en este navegador.</div>
       </div>
     </div>
   </div>
@@ -2275,7 +2301,7 @@ function renderAll() {
   // de quedarse todos en "Carga el CSV..." como paso el 07/09.
   const pasos = [
     renderKPIs, renderEquity, renderTrades, renderActivoBars, renderSistema,
-    renderCalendar, renderDistribucion, renderMetricas, renderMetaCuenta,
+    renderCalendar, renderDistribucion, renderMetricas, renderDuracionTrades, renderMetaCuenta,
     renderResumenMensual, renderCuentasPanels, renderAnalisis, actualizarResumenPEISYS,
     archivarMesesCerrados, renderBannerConsistencia, renderBannerTripleWitching
   ];
@@ -3467,6 +3493,106 @@ function renderBitacoraAnalisis() {
       <span style="color:var(--text-muted);font-family:'DM Mono',monospace">${new Date(e.fecha).toLocaleDateString('es-AR')}</span>
       <span style="margin-left:8px">${(e.texto || '').replace(/</g,'&lt;')}</span>
     </div>`).join('');
+}
+
+// ══════════════════════════════════════
+// DURACIÓN DE TRADES — antigüedad de los abiertos + duración de los cerrados
+// Los abiertos se miden contra hoy (alcanza con FECHA). Los cerrados necesitan una columna
+// opcional "FECHA CIERRE" (misma forma que FECHA); sin ella solo hay antigüedad.
+// ══════════════════════════════════════
+function parseFechaTrade(v) {
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function diasEntre(a, b) {
+  const da = new Date(a.getFullYear(), a.getMonth(), a.getDate());
+  const db = new Date(b.getFullYear(), b.getMonth(), b.getDate());
+  return Math.round((db - da) / 86400000);
+}
+
+function fechaCierreTrade(t) {
+  const k = Object.keys(t).find(x => /fecha/.test(x) && /cierre/.test(x)) || (('cierre' in t) ? 'cierre' : null);
+  return k ? parseFechaTrade(t[k]) : null;
+}
+
+function renderDuracionTrades() {
+  const cont = document.getElementById('metricas-duracion');
+  if (!cont) return;
+  const data = getTradesFiltrados();
+  if (!data.length) {
+    cont.innerHTML = `<div style="color:var(--text-muted);font-size:11px;text-align:center;padding:30px 0">Sin trades para este filtro</div>`;
+    return;
+  }
+  const hoy = new Date();
+  const MUESTRA_CHICA = 5;
+  const abiertos = [], ganados = [], perdidos = [], otros = [];
+  let sinCierre = 0, invalidas = 0;
+  data.forEach(t => {
+    const entrada = parseFechaTrade(col(t, 'fecha'));
+    const res = String(col(t, 'resultado', 'estado') || '').toUpperCase();
+    if (!entrada) return;
+    if (res === 'EN CURSO') {
+      abiertos.push({ activo: col(t, 'activo'), sistema: col(t, 'sistema'), dir: col(t, 'dir'), entrada, dias: Math.max(0, diasEntre(entrada, hoy)) });
+    } else if (res === 'GANADA' || res === 'PERDIDA' || res === 'BREAKEVEN') {
+      const cierre = fechaCierreTrade(t);
+      if (!cierre) { sinCierre++; return; }
+      const dias = diasEntre(entrada, cierre);
+      if (dias < 0) { invalidas++; return; }
+      (res === 'GANADA' ? ganados : res === 'PERDIDA' ? perdidos : otros).push(dias);
+    }
+  });
+  const prom = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : null;
+  const fmt = v => v == null ? '—' : (Math.round(v * 10) / 10).toString().replace('.', ',') + ' d';
+  const conDato = ganados.length + perdidos.length + otros.length;
+  const todos = ganados.concat(perdidos, otros);
+
+  const filasAb = abiertos.sort((a, b) => b.dias - a.dias).map(a => `
+    <tr><td style="padding:4px 12px 4px 0">${escHtmlGen(a.activo)}</td>
+        <td style="padding:4px 12px 4px 0;color:var(--text-muted)">${escHtmlGen(a.sistema)} ${escHtmlGen(a.dir)}</td>
+        <td style="padding:4px 12px 4px 0;color:var(--text-muted)">${a.entrada.toLocaleDateString('es-AR')}</td>
+        <td style="padding:4px 0;font-family:'DM Mono',monospace">${a.dias} d</td></tr>`).join('');
+  const bloqueAb = abiertos.length
+    ? `<table style="font-size:12px;border-collapse:collapse"><tbody>${filasAb}</tbody></table>`
+    : `<div style="color:var(--text-muted);font-size:12px">Sin trades en curso.</div>`;
+
+  let bloqueCe;
+  if (!conDato) {
+    bloqueCe = `<div style="color:var(--text-muted);font-size:12px">Sin datos de cierre. Agregá la columna <strong>FECHA CIERRE</strong> al final del Excel (mismo formato que FECHA) y recargá el CSV para ver la duración de los cerrados${sinCierre ? ` (hoy ${sinCierre} cerrado${sinCierre > 1 ? 's' : ''} sin fecha)` : ''}.</div>`;
+  } else {
+    bloqueCe = `<div style="display:flex;flex-wrap:wrap;gap:24px">
+      <div><div class="config-label">Promedio general</div><div style="font-family:'DM Mono',monospace;font-size:18px">${fmt(prom(todos))}</div></div>
+      <div><div class="config-label">Ganadores (${ganados.length})</div><div style="font-family:'DM Mono',monospace;font-size:18px;color:var(--green)">${fmt(prom(ganados))}</div></div>
+      <div><div class="config-label">Perdedores (${perdidos.length})</div><div style="font-family:'DM Mono',monospace;font-size:18px;color:var(--red)">${fmt(prom(perdidos))}</div></div>
+    </div>
+    <div class="config-hint">${conDato} cerrado${conDato > 1 ? 's' : ''} con fecha de cierre${sinCierre ? `, ${sinCierre} sin ella` : ''}${invalidas ? `, ${invalidas} con cierre anterior a la entrada (ignorados)` : ''}.${conDato < MUESTRA_CHICA ? ' ⚠ Muestra chica: no sacar conclusiones todavía.' : ''}</div>`;
+  }
+  cont.innerHTML = `<div style="padding:8px 0">
+    <div class="config-label">En curso — antigüedad</div>${bloqueAb}
+    <div class="config-label" style="margin-top:16px">Cerrados — duración</div>${bloqueCe}</div>`;
+}
+
+// ══════════════════════════════════════
+// ABRIR TICKER — links de salida (sin API): TradingView, Finviz, SEC EDGAR, Yahoo Finance
+// ══════════════════════════════════════
+function tickerValido(t) { return /^[A-Za-z0-9.\-^=]{1,12}$/.test(t); }
+
+function abrirTicker(sitio) {
+  const inp = document.getElementById('tk-input');
+  const st = document.getElementById('tk-status');
+  const t = (inp?.value || '').trim().toUpperCase();
+  if (!tickerValido(t)) { if (st) st.textContent = '✕ Ticker inválido (letras, números y . - ^ =)'; return; }
+  if (st) st.textContent = '';
+  const q = encodeURIComponent(t);
+  const urls = {
+    tv: `https://www.tradingview.com/chart/?symbol=${q}`,
+    finviz: `https://finviz.com/quote.ashx?t=${q}`,
+    sec: `https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=${q}&type=&dateb=&owner=include&count=40`,
+    yahoo: `https://finance.yahoo.com/quote/${q}`
+  };
+  if (urls[sitio]) window.open(urls[sitio], '_blank', 'noopener,noreferrer');
 }
 
 // ══════════════════════════════════════
