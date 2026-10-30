@@ -1452,6 +1452,25 @@ body {
       <div class="config-hint">La invalidación es obligatoria a propósito: un escenario sin condición que lo anule no se puede medir después.</div>
     </div>
 
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Pegar escenarios</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">texto "Campo: valor" o CSV · vista previa antes de guardar</span>
+      </div>
+      <div style="padding:8px 0;max-width:none">
+        <textarea id="esc-paste-texto" class="config-input" rows="8" placeholder="Pegá acá uno o varios escenarios (separados por una línea con ---) o un CSV con encabezado. Tocá «Insertar plantilla» para ver el formato."></textarea>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="previsualizarPegadoEscenarios()">Analizar</button>
+        <button id="esc-paste-guardar" class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarPegadoEscenarios()" disabled>Guardar</button>
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="insertarPlantillaEscenario()">Insertar plantilla</button>
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="limpiarPegadoEscenarios()">Limpiar</button>
+        <span id="esc-paste-status" style="font-size:11px"></span>
+      </div>
+      <div id="esc-paste-preview" style="margin-top:10px;overflow-x:auto"></div>
+      <div class="config-hint">Cada escenario empieza con «Activo:». Obligatorios: Activo, Tesis, Invalidación. Opcionales: Temporalidad (15m, 1H, 4H, D1, W1, M1; si falta, D1), Sesgo (alcista/bajista/neutral), Estado, Entrada, Objetivo, Link, Clase (si falta se deduce) y Creado (dd/mm/aaaa: sirve para cargar anotaciones atrasadas con su fecha real). Se omiten los duplicados (mismo activo, temporalidad, sesgo y entrada). CSV: primera fila con los nombres de columna, separador ; , o tab, una fila por escenario.</div>
+    </div>
+
     <div style="margin:16px 0 8px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
       <select class="config-input" style="width:auto" onchange="setFiltroEscenarios('estado', this.value)">
         <option value="vigente">Vigentes</option><option value="cumplido">Cumplidos</option>
@@ -2110,6 +2129,8 @@ const ESC_SESGOS = { alcista:'Alcista', bajista:'Bajista', neutral:'Neutral' };
 const ESC_TEMPORALIDADES = ['15m','1H','4H','D1','W1','M1'];
 let escenariosData = [];
 let escenariosFiltro = { clase: 'todas', estado: 'vigente', texto: '' };
+let escPegadoItems = [];       // vista previa del pegado de escenarios
+let escPegadoGuardando = false;
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -3676,6 +3697,270 @@ async function cambiarEstadoEscenario(id, estado) {
     const st = document.getElementById('esc-lista-status');
     if (st) st.textContent = '✕ No se pudo actualizar el estado';
   }
+}
+
+// ── Pegado de escenarios: texto "Campo: valor" (varios separados por ---) o CSV con encabezado ──
+// Sin constantes de nivel superior (evita TDZ): todo el mapeo vive dentro de las funciones.
+function escNorm(s) {
+  return String(s == null ? '' : s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function escCampoCanonico(clave) {
+  const k = escNorm(clave);
+  const alias = {
+    activo: ['activo', 'par', 'ticker', 'simbolo', 'instrumento'],
+    clase: ['clase', 'clase de activo'],
+    temporalidad: ['temporalidad', 'tf', 'timeframe', 'marco temporal', 'marco'],
+    sesgo: ['sesgo', 'direccion', 'dir'],
+    estado: ['estado'],
+    tesis: ['tesis', 'analisis', 'contexto', 'nota', 'notas', 'comentario'],
+    entrada: ['entrada', 'zona', 'zona de entrada', 'entry'],
+    invalidacion: ['invalidacion', 'invalida', 'sl', 'stop', 'stop loss'],
+    objetivo: ['objetivo', 'tp', 'target', 'take profit'],
+    link: ['link', 'url', 'tradingview', 'link tradingview'],
+    creado: ['creado', 'fecha', 'fecha creacion', 'fecha de creacion']
+  };
+  for (const c in alias) { if (alias[c].includes(k)) return c; }
+  return '';
+}
+
+// Bloques "Campo: valor". Cada escenario empieza con "Activo:" (o se separa con una línea ---).
+function parsearBloquesEscenarios(texto) {
+  const bloques = [];
+  let actual = null, campoActual = '';
+  const cerrar = () => { if (actual && Object.keys(actual).length) bloques.push(actual); actual = null; campoActual = ''; };
+  String(texto).replace(/\r/g, '').split('\n').forEach(linea => {
+    const l = linea.replace(/\t/g, ' ');
+    if (/^\s*`{3,}/.test(l)) return;
+    if (/^\s*[-=_]{3,}\s*$/.test(l)) { cerrar(); return; }
+    const m = l.match(/^\s*([^:\n]{1,30}?)\s*:\s*(.*)$/);
+    const campo = m ? escCampoCanonico(m[1]) : '';
+    if (campo) {
+      if (campo === 'activo' && actual && actual.activo !== undefined) cerrar();
+      if (!actual) actual = {};
+      // En "Activo" se corta en el primer hueco de 2+ espacios (descarta acotaciones alineadas tipo "GBPCHF   (nota)").
+      const val = campo === 'activo' ? m[2].trim().split(/\s{2,}/)[0] : m[2].trim();
+      actual[campo] = (campo === 'tesis' && actual.tesis) ? actual.tesis + '\n' + val : val;
+      campoActual = campo;
+    } else if (actual && campoActual && l.trim()) {
+      const t = l.trim();
+      actual[campoActual] = (actual[campoActual] || '') + (/^[-•*]/.test(t) ? '\n' : ' ') + t;
+    }
+  });
+  cerrar();
+  return bloques;
+}
+
+function splitLineaCSVEsc(linea, delim) {
+  const out = []; let cur = '', q = false;
+  for (let i = 0; i < linea.length; i++) {
+    const ch = linea[i];
+    if (q) {
+      if (ch === '"') { if (linea[i + 1] === '"') { cur += '"'; i++; } else q = false; } else cur += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === delim) { out.push(cur); cur = ''; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim());
+}
+
+// CSV con encabezado (separador ; tab o ,). Devuelve null si el texto no parece un CSV de escenarios.
+function parsearCSVEscenarios(texto) {
+  const lineas = String(texto).replace(/\r/g, '').split('\n').filter(l => l.trim());
+  if (lineas.length < 2) return null;
+  for (const delim of [';', '\t', ',']) {
+    const enc = splitLineaCSVEsc(lineas[0], delim).map(escCampoCanonico);
+    if (enc.includes('activo') && enc.filter(Boolean).length >= 3) {
+      return lineas.slice(1).map(l => {
+        const v = splitLineaCSVEsc(l, delim), o = {};
+        enc.forEach((c, i) => { if (c && v[i] !== undefined && v[i] !== '') o[c] = v[i]; });
+        return o;
+      }).filter(o => Object.keys(o).length);
+    }
+  }
+  return null;
+}
+
+// Fecha dd/mm/aaaa (formato argentino), dd-mm-aa o aaaa-mm-dd → ISO al mediodía local, o null.
+function escParseFecha(s) {
+  const t = String(s || '').trim();
+  let y, m, d, mt;
+  if ((mt = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T].*)?$/))) { y = +mt[1]; m = +mt[2]; d = +mt[3]; }
+  else if ((mt = t.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2}|\d{4})(?:\s.*)?$/))) { d = +mt[1]; m = +mt[2]; y = +mt[3]; if (y < 100) y += 2000; }
+  else return null;
+  const f = new Date(y, m - 1, d, 12, 0, 0);
+  return (f.getFullYear() === y && f.getMonth() === m - 1 && f.getDate() === d) ? f.toISOString() : null;
+}
+
+function escClave(e) {
+  return [normalizarActivo(e.activo), e.temporalidad || '', e.sesgo || '', normalizarActivo(e.entrada)].join('|');
+}
+
+function escNormalizarItem(raw) {
+  const av = [], er = [];
+  const lim = x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim();
+  const activo = lim(raw.activo);
+  const tesis = String(raw.tesis || '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+  const entrada = lim(raw.entrada), invalidacion = lim(raw.invalidacion), objetivo = lim(raw.objetivo);
+  if (!activo) er.push('falta activo');
+  if (!tesis) er.push('falta tesis');
+  if (!invalidacion) er.push('falta invalidación');
+
+  let clase = '';
+  if (raw.clase) {
+    const mapaC = { forex: 'forex', fx: 'forex', indice: 'indice', indices: 'indice', accion: 'accion', acciones: 'accion',
+      bono: 'bono', bonos: 'bono', commodity: 'commodity', commodities: 'commodity', otro: 'otro', 'sin clasificar': 'otro' };
+    clase = mapaC[escNorm(raw.clase)] || '';
+    if (!clase) av.push(`clase "${lim(raw.clase)}" no reconocida: se deduce del nombre`);
+  }
+  if (!clase) clase = activo ? claseDeActivo(activo) : 'otro';
+
+  const mapaT = { '15m': '15m', '15min': '15m', '1h': '1H', 'h1': '1H', '60m': '1H', '4h': '4H', 'h4': '4H',
+    'd1': 'D1', '1d': 'D1', 'd': 'D1', 'diario': 'D1', 'diaria': 'D1', 'daily': 'D1',
+    'w1': 'W1', '1w': 'W1', 'w': 'W1', 'semanal': 'W1', 'weekly': 'W1', 'm1': 'M1', 'mensual': 'M1', 'monthly': 'M1' };
+  let temporalidad = mapaT[escNorm(raw.temporalidad).replace(/ /g, '')] || '';
+  if (!temporalidad) { temporalidad = 'D1'; av.push(raw.temporalidad ? `temporalidad "${lim(raw.temporalidad)}" no reconocida: D1` : 'sin temporalidad: D1'); }
+
+  const mapaS = { alcista: 'alcista', long: 'alcista', largo: 'alcista', compra: 'alcista', comprador: 'alcista', bull: 'alcista', bullish: 'alcista', buy: 'alcista',
+    bajista: 'bajista', short: 'bajista', corto: 'bajista', venta: 'bajista', vendedor: 'bajista', bear: 'bajista', bearish: 'bajista', sell: 'bajista', neutral: 'neutral' };
+  let sesgo = mapaS[escNorm(raw.sesgo)] || '';
+  if (!sesgo) { sesgo = 'neutral'; av.push(raw.sesgo ? `sesgo "${lim(raw.sesgo)}" no reconocido: neutral` : 'sin sesgo: neutral'); }
+
+  const mapaE = { vigente: 'vigente', activo: 'vigente', abierto: 'vigente', 'en curso': 'vigente',
+    cumplido: 'cumplido', cumplida: 'cumplido', invalidado: 'invalidado', invalidada: 'invalidado', archivado: 'archivado', archivada: 'archivado' };
+  let estado = 'vigente';
+  if (raw.estado) {
+    estado = mapaE[escNorm(raw.estado)] || '';
+    if (!estado) { estado = 'vigente'; av.push(`estado "${lim(raw.estado)}" no reconocido: vigente`); }
+  }
+
+  let creado = '';
+  if (raw.creado) {
+    creado = escParseFecha(raw.creado) || '';
+    if (!creado) av.push(`fecha "${lim(raw.creado)}" no válida (usá dd/mm/aaaa): se usa hoy`);
+  }
+
+  let link = '';
+  if (raw.link) {
+    link = linkSeguro(lim(raw.link).split(' ')[0]);
+    if (!link) av.push('link descartado (solo http/https)');
+  }
+
+  const it = { activo, clase, temporalidad, sesgo, estado, creado, tesis, entrada, invalidacion, objetivo, link,
+    avisos: av, errores: er, duplicado: false };
+  it.clave = escClave(it);
+  return it;
+}
+
+function escPegadoMsg(t, ok) {
+  const st = document.getElementById('esc-paste-status');
+  if (st) { st.style.color = ok ? 'var(--green)' : 'var(--red)'; st.textContent = t; }
+}
+
+function previsualizarPegadoEscenarios() {
+  const texto = (document.getElementById('esc-paste-texto')?.value || '').trim();
+  if (!texto) { escPegadoMsg('✕ Pegá primero el texto', false); return; }
+  const crudos = parsearCSVEscenarios(texto) || parsearBloquesEscenarios(texto);
+  if (!crudos.length) {
+    escPegadoItems = []; renderPegadoEscenarios();
+    escPegadoMsg('✕ No encontré escenarios: cada uno empieza con "Activo: ..." (o un CSV con encabezado)', false);
+    return;
+  }
+  const vistos = new Set(escenariosData.map(escClave));
+  escPegadoItems = crudos.map(raw => {
+    const it = escNormalizarItem(raw);
+    if (!it.errores.length) { if (vistos.has(it.clave)) it.duplicado = true; else vistos.add(it.clave); }
+    return it;
+  });
+  renderPegadoEscenarios();
+  const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado).length;
+  const dup = escPegadoItems.filter(i => i.duplicado).length;
+  const err = escPegadoItems.filter(i => i.errores.length).length;
+  escPegadoMsg(`${listos} listo${listos === 1 ? '' : 's'}${dup ? ` · ${dup} duplicado${dup === 1 ? '' : 's'} (se omite${dup === 1 ? '' : 'n'})` : ''}${err ? ` · ${err} con errores (no se guarda${err === 1 ? '' : 'n'})` : ''}`, listos > 0);
+}
+
+function renderPegadoEscenarios() {
+  const cont = document.getElementById('esc-paste-preview');
+  const btn = document.getElementById('esc-paste-guardar');
+  const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado).length;
+  if (btn) { btn.disabled = listos === 0; btn.textContent = listos ? `Guardar ${listos}` : 'Guardar'; }
+  if (!cont) return;
+  if (!escPegadoItems.length) { cont.innerHTML = ''; return; }
+  const td = 'style="padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top"';
+  const th = 'style="padding:4px 8px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)"';
+  const filas = escPegadoItems.map(it => {
+    const est = it.errores.length ? `<span style="color:var(--red)">✕ ${escHtmlGen(it.errores.join(', '))}</span>`
+      : it.duplicado ? '<span style="color:var(--text-muted)">⚠ duplicado: se omite</span>'
+      : '<span style="color:var(--green)">✓ listo</span>';
+    const av = it.avisos.length ? `<div style="color:var(--text-muted);font-size:10px;margin-top:2px">${escHtmlGen(it.avisos.join(' · '))}</div>` : '';
+    const tesisCorta = it.tesis.length > 70 ? it.tesis.slice(0, 70) + '…' : it.tesis;
+    const fecha = it.creado ? new Date(it.creado).toLocaleDateString('es-AR') : 'hoy';
+    return `<tr><td ${td}><strong>${escHtmlGen(it.activo)}</strong></td><td ${td}>${escHtmlGen(CLASE_LABELS[it.clase] || '')}</td><td ${td}>${escHtmlGen(it.temporalidad)}</td>`
+      + `<td ${td}>${escHtmlGen(ESC_SESGOS[it.sesgo] || '')}</td><td ${td}>${escHtmlGen(ESC_ESTADOS[it.estado] || '')}</td><td ${td}>${escHtmlGen(fecha)}</td>`
+      + `<td ${td}>${escHtmlGen(it.entrada)}</td><td ${td}>${escHtmlGen(it.invalidacion)}</td><td ${td}>${escHtmlGen(it.objetivo)}</td>`
+      + `<td ${td}>${escHtmlGen(tesisCorta)}</td><td ${td}>${est}${av}</td></tr>`;
+  }).join('');
+  cont.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace"><thead><tr>`
+    + ['Activo', 'Clase', 'TF', 'Sesgo', 'Estado', 'Creado', 'Entrada', 'Invalidación', 'Objetivo', 'Tesis', 'Resultado'].map(h => `<th ${th}>${h}</th>`).join('')
+    + `</tr></thead><tbody>${filas}</tbody></table>`;
+}
+
+async function guardarPegadoEscenarios() {
+  if (escPegadoGuardando) return;
+  const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado);
+  if (!listos.length) { escPegadoMsg('✕ No hay escenarios listos para guardar', false); return; }
+  if (typeof window.peisysSetDoc !== 'function') { escPegadoMsg('✕ Puente PEI·SYS no disponible', false); return; }
+  escPegadoGuardando = true;
+  const btn = document.getElementById('esc-paste-guardar');
+  if (btn) btn.disabled = true;
+  const base = Date.now();
+  let ok = 0, fallo = 0;
+  for (let i = 0; i < listos.length; i++) {
+    const it = listos[i];
+    const id = String(base + i);
+    const ahora = new Date().toISOString();
+    const e = { creado: it.creado || ahora, actualizado: ahora, activo: it.activo, clase: it.clase, temporalidad: it.temporalidad,
+      sesgo: it.sesgo, tesis: it.tesis, entrada: it.entrada, invalidacion: it.invalidacion, objetivo: it.objetivo, link: it.link, estado: it.estado };
+    try {
+      await window.peisysSetDoc('escenarios', id, e);
+      escenariosData.push(Object.assign({ id }, e));
+      ok++;
+    } catch (err) {
+      fallo++;
+      console.warn('guardarPegadoEscenarios falló', err);
+    }
+  }
+  escenariosData.sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0));
+  escPegadoGuardando = false;
+  renderEscenarios();
+  if (!fallo) {
+    const ta = document.getElementById('esc-paste-texto');
+    if (ta) ta.value = '';
+    escPegadoItems = [];
+    renderPegadoEscenarios();
+    escPegadoMsg(`✓ ${ok} escenario${ok === 1 ? '' : 's'} guardado${ok === 1 ? '' : 's'} ${new Date().toLocaleTimeString('es-AR')}`, true);
+  } else {
+    renderPegadoEscenarios();
+    escPegadoMsg(`✕ ${ok} guardados, ${fallo} fallaron: tocá Analizar de nuevo y reintentá (los ya guardados se omiten como duplicados)`, false);
+  }
+}
+
+function limpiarPegadoEscenarios() {
+  const ta = document.getElementById('esc-paste-texto');
+  if (ta) ta.value = '';
+  escPegadoItems = [];
+  renderPegadoEscenarios();
+  escPegadoMsg('', true);
+}
+
+function insertarPlantillaEscenario() {
+  const ta = document.getElementById('esc-paste-texto');
+  if (!ta) return;
+  const hoy = new Date().toLocaleDateString('es-AR');
+  ta.value = `Activo: EUR/USD\nTemporalidad: 4H\nSesgo: Alcista\nEstado: Vigente\nCreado: ${hoy}\nEntrada: 1,0850 (zona 1,0840-1,0860)\nInvalidación: 1,0790\nObjetivo: 1,0950\nLink: https://www.tradingview.com/x/...\nTesis: Estructura, patrón y contexto, en una o varias líneas.\n---\nActivo: SPX\nTemporalidad: D1\nSesgo: Alcista\nInvalidación: Cierre diario bajo 5780\nTesis: Segundo escenario de ejemplo.`;
+  escPegadoMsg('Plantilla insertada: reemplazá los datos y tocá Analizar', true);
 }
 
 function renderEscenarios() {
