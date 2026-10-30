@@ -1468,7 +1468,7 @@ body {
         <span id="esc-paste-status" style="font-size:11px"></span>
       </div>
       <div id="esc-paste-preview" style="margin-top:10px;overflow-x:auto"></div>
-      <div class="config-hint">Cada escenario empieza con «Activo:». Obligatorios: Activo, Tesis, Invalidación. Opcionales: Temporalidad (15m, 1H, 4H, D1, W1, M1; si falta, D1), Sesgo (alcista/bajista/neutral), Estado, Entrada, Objetivo, Link, Clase (si falta se deduce) y Creado (dd/mm/aaaa: sirve para cargar anotaciones atrasadas con su fecha real). Se omiten los duplicados (mismo activo, temporalidad, sesgo y entrada). CSV: primera fila con los nombres de columna, separador ; , o tab, una fila por escenario.</div>
+      <div class="config-hint">Cada escenario empieza con «Activo:». Obligatorios: Activo, Tesis, Invalidación. Opcionales: Temporalidad (15m, 1H, 4H, D1, W1, M1; si falta, D1), Sesgo (alcista/bajista/neutral), Estado, Entrada, Objetivo, Link, Clase (si falta se deduce) y Creado (dd/mm/aaaa: sirve para cargar anotaciones atrasadas con su fecha real). Para sumar una actualización a un escenario vigente: bloque «Actualizar: ACTIVO» con Fecha, Link y Texto (si hay varios del mismo activo, agregá Temporalidad); también sirve para cargar un escenario nuevo y su historial en el mismo pegado. Se omiten los duplicados (mismo activo, temporalidad, sesgo y entrada; o misma actualización repetida). CSV: primera fila con los nombres de columna, separador ; , o tab, una fila por escenario.</div>
     </div>
 
     <div style="margin:16px 0 8px 0;display:flex;flex-wrap:wrap;gap:10px;align-items:center">
@@ -2133,6 +2133,9 @@ let escPegadoItems = [];       // vista previa del pegado de escenarios
 let escPegadoGuardando = false;
 let escPegadoTexto = '';       // texto que se analizó por última vez
 let escPegadoTimer = null;
+let escEditandoId = '';        // escenario en edición (formulario dentro de la tarjeta)
+let escUpFormId = '';          // escenario con el formulario "Actualización" abierto
+let escUpAbiertos = new Set(); // escenarios con la línea de tiempo desplegada
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -3716,7 +3719,8 @@ function escCampoCanonico(clave) {
     temporalidad: ['temporalidad', 'tf', 'timeframe', 'marco temporal', 'marco'],
     sesgo: ['sesgo', 'direccion', 'dir'],
     estado: ['estado'],
-    tesis: ['tesis', 'analisis', 'contexto', 'nota', 'notas', 'comentario'],
+    tesis: ['tesis', 'analisis', 'contexto', 'nota', 'notas', 'comentario', 'texto'],
+    actualizar: ['actualizar', 'actualizacion', 'update'],
     entrada: ['entrada', 'zona', 'zona de entrada', 'entry'],
     invalidacion: ['invalidacion', 'invalida', 'sl', 'stop', 'stop loss'],
     objetivo: ['objetivo', 'tp', 'target', 'take profit'],
@@ -3739,10 +3743,10 @@ function parsearBloquesEscenarios(texto) {
     const m = l.match(/^\s*([^:\n]{1,30}?)\s*:\s*(.*)$/);
     const campo = m ? escCampoCanonico(m[1]) : '';
     if (campo) {
-      if (campo === 'activo' && actual && actual.activo !== undefined) cerrar();
+      if ((campo === 'activo' || campo === 'actualizar') && actual && (actual.activo !== undefined || actual.actualizar !== undefined)) cerrar();
       if (!actual) actual = {};
       // En "Activo" se corta en el primer hueco de 2+ espacios (descarta acotaciones alineadas tipo "GBPCHF   (nota)").
-      const val = campo === 'activo' ? m[2].trim().split(/\s{2,}/)[0] : m[2].trim();
+      const val = (campo === 'activo' || campo === 'actualizar') ? m[2].trim().split(/\s{2,}/)[0] : m[2].trim();
       actual[campo] = (campo === 'tesis' && actual.tesis) ? actual.tesis + '\n' + val : val;
       campoActual = campo;
     } else if (actual && campoActual && l.trim()) {
@@ -3796,6 +3800,13 @@ function escParseFecha(s) {
   return (f.getFullYear() === y && f.getMonth() === m - 1 && f.getDate() === d) ? f.toISOString() : null;
 }
 
+function escMapaTemporalidad(txt) {
+  const mapaT = { '15m': '15m', '15min': '15m', '1h': '1H', 'h1': '1H', '60m': '1H', '4h': '4H', 'h4': '4H',
+    'd1': 'D1', '1d': 'D1', 'd': 'D1', 'diario': 'D1', 'diaria': 'D1', 'daily': 'D1',
+    'w1': 'W1', '1w': 'W1', 'w': 'W1', 'semanal': 'W1', 'weekly': 'W1', 'm1': 'M1', 'mensual': 'M1', 'monthly': 'M1' };
+  return mapaT[escNorm(txt).replace(/ /g, '')] || '';
+}
+
 function escClave(e) {
   return [normalizarActivo(e.activo), e.temporalidad || '', e.sesgo || '', normalizarActivo(e.entrada)].join('|');
 }
@@ -3819,10 +3830,7 @@ function escNormalizarItem(raw) {
   }
   if (!clase) clase = activo ? claseDeActivo(activo) : 'otro';
 
-  const mapaT = { '15m': '15m', '15min': '15m', '1h': '1H', 'h1': '1H', '60m': '1H', '4h': '4H', 'h4': '4H',
-    'd1': 'D1', '1d': 'D1', 'd': 'D1', 'diario': 'D1', 'diaria': 'D1', 'daily': 'D1',
-    'w1': 'W1', '1w': 'W1', 'w': 'W1', 'semanal': 'W1', 'weekly': 'W1', 'm1': 'M1', 'mensual': 'M1', 'monthly': 'M1' };
-  let temporalidad = mapaT[escNorm(raw.temporalidad).replace(/ /g, '')] || '';
+  let temporalidad = escMapaTemporalidad(raw.temporalidad);
   if (!temporalidad) { temporalidad = 'D1'; av.push(raw.temporalidad ? `temporalidad "${lim(raw.temporalidad)}" no reconocida: D1` : 'sin temporalidad: D1'); }
 
   const mapaS = { alcista: 'alcista', long: 'alcista', largo: 'alcista', compra: 'alcista', comprador: 'alcista', bull: 'alcista', bullish: 'alcista', buy: 'alcista',
@@ -3861,6 +3869,54 @@ function escPegadoMsg(t, ok) {
   if (st) { st.style.color = ok ? 'var(--green)' : 'var(--red)'; st.textContent = t; }
 }
 
+// Firma de una actualización (para detectar repetidas): día + texto + link.
+function escSigUp(u) {
+  const dia = u.fecha ? new Date(u.fecha).toDateString() : '';
+  return [dia, normalizarActivo(u.texto), String(u.link || '')].join('|');
+}
+
+// Bloque "Actualizar: ACTIVO" (+ Fecha, Link, Texto, Temporalidad opcional).
+function escNormalizarUpdate(raw) {
+  const av = [], er = [];
+  const lim = x => String(x == null ? '' : x).replace(/\s+/g, ' ').trim();
+  const activo = lim(raw.actualizar);
+  const texto = String(raw.tesis || '').replace(/[ \t]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+  let link = '';
+  if (raw.link) { link = linkSeguro(lim(raw.link).split(' ')[0]); if (!link) av.push('link descartado (solo http/https)'); }
+  if (!activo) er.push('falta el activo');
+  if (!texto && !link) er.push('falta texto o link');
+  let fecha = '';
+  if (raw.creado) { fecha = escParseFecha(raw.creado) || ''; if (!fecha) av.push(`fecha "${lim(raw.creado)}" no válida (dd/mm/aaaa): se usa hoy`); }
+  if (!fecha) { const h = new Date(); fecha = new Date(h.getFullYear(), h.getMonth(), h.getDate(), 12).toISOString(); }
+  let temporalidad = '';
+  if (raw.temporalidad) {
+    temporalidad = escMapaTemporalidad(raw.temporalidad);
+    if (!temporalidad) av.push(`temporalidad "${lim(raw.temporalidad)}" no reconocida: se ignora`);
+  }
+  return { tipo: 'actualizacion', activo, temporalidad, fecha, texto, link, avisos: av, errores: er, duplicado: false, destino: null };
+}
+
+// Busca a qué escenario va la actualización: vigentes ya guardados + escenarios nuevos del mismo pegado.
+function escResolverActualizacion(it, ctx) {
+  if (it.errores.length) return it;
+  const k = normalizarActivo(it.activo);
+  const coincide = e => normalizarActivo(e.activo) === k && (!it.temporalidad || e.temporalidad === it.temporalidad);
+  const cand = escenariosData.filter(e => (e.estado || 'vigente') === 'vigente' && coincide(e)).map(ref => ({ tipo: 'existente', ref }))
+    .concat(ctx.nuevos.filter(coincide).map(ref => ({ tipo: 'nuevo', ref })));
+  if (!cand.length) { it.errores.push(`no hay un escenario vigente de ${it.activo}${it.temporalidad ? ' (' + it.temporalidad + ')' : ''}`); return it; }
+  if (cand.length > 1) { it.errores.push(`hay ${cand.length} escenarios de ${it.activo}: agregá "Temporalidad:"`); return it; }
+  const d = cand[0];
+  it.destino = d;
+  const sig = escSigUp(it);
+  const previas = new Set((d.tipo === 'existente' ? (Array.isArray(d.ref.actualizaciones) ? d.ref.actualizaciones : []) : []).map(escSigUp));
+  const vistas = ctx.vistos.get(d.ref) || new Set();
+  if (previas.has(sig) || vistas.has(sig)) { it.duplicado = true; return it; }
+  vistas.add(sig);
+  ctx.vistos.set(d.ref, vistas);
+  if (d.tipo === 'nuevo') (d.ref.updatesPegado = d.ref.updatesPegado || []).push(it);
+  return it;
+}
+
 function previsualizarPegadoEscenarios() {
   const texto = (document.getElementById('esc-paste-texto')?.value || '').trim();
   if (!texto) { escPegadoMsg('✕ Pegá primero el texto', false); return; }
@@ -3868,20 +3924,25 @@ function previsualizarPegadoEscenarios() {
   const crudos = parsearCSVEscenarios(texto) || parsearBloquesEscenarios(texto);
   if (!crudos.length) {
     escPegadoItems = []; renderPegadoEscenarios();
-    escPegadoMsg('✕ No encontré escenarios: cada uno empieza con "Activo: ..." (o un CSV con encabezado)', false);
+    escPegadoMsg('✕ No encontré escenarios: cada uno empieza con "Activo: ..." o "Actualizar: ..." (o un CSV con encabezado)', false);
     return;
   }
   const vistos = new Set(escenariosData.map(escClave));
+  const ctx = { nuevos: [], vistos: new Map() };
   escPegadoItems = crudos.map(raw => {
+    if (raw.actualizar !== undefined) return escResolverActualizacion(escNormalizarUpdate(raw), ctx);
     const it = escNormalizarItem(raw);
-    if (!it.errores.length) { if (vistos.has(it.clave)) it.duplicado = true; else vistos.add(it.clave); }
+    it.tipo = 'escenario';
+    if (!it.errores.length) { if (vistos.has(it.clave)) it.duplicado = true; else { vistos.add(it.clave); ctx.nuevos.push(it); } }
     return it;
   });
   renderPegadoEscenarios();
-  const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado).length;
+  const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado);
+  const nUp = listos.filter(i => i.tipo === 'actualizacion').length, nEsc = listos.length - nUp;
   const dup = escPegadoItems.filter(i => i.duplicado).length;
   const err = escPegadoItems.filter(i => i.errores.length).length;
-  escPegadoMsg(`${listos} listo${listos === 1 ? '' : 's'}${dup ? ` · ${dup} duplicado${dup === 1 ? '' : 's'} (se omite${dup === 1 ? '' : 'n'})` : ''}${err ? ` · ${err} con errores (no se guarda${err === 1 ? '' : 'n'})` : ''}`, listos > 0);
+  const detalle = nUp ? ` (${nEsc} escenario${nEsc === 1 ? '' : 's'} + ${nUp} actualizaci${nUp === 1 ? 'ón' : 'ones'})` : '';
+  escPegadoMsg(`${listos.length} listo${listos.length === 1 ? '' : 's'}${detalle}${dup ? ` · ${dup} duplicado${dup === 1 ? '' : 's'} (se omite${dup === 1 ? '' : 'n'})` : ''}${err ? ` · ${err} con errores (no se guarda${err === 1 ? '' : 'n'})` : ''}`, listos.length > 0);
 }
 
 function renderPegadoEscenarios() {
@@ -3893,21 +3954,40 @@ function renderPegadoEscenarios() {
   if (!escPegadoItems.length) { cont.innerHTML = ''; return; }
   const td = 'style="padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top"';
   const th = 'style="padding:4px 8px;text-align:left;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);border-bottom:1px solid var(--border)"';
-  const filas = escPegadoItems.map(it => {
+  const celdaRes = it => {
     const est = it.errores.length ? `<span style="color:var(--red)">✕ ${escHtmlGen(it.errores.join(', '))}</span>`
       : it.duplicado ? '<span style="color:var(--text-muted)">⚠ duplicado: se omite</span>'
       : '<span style="color:var(--green)">✓ listo</span>';
     const av = it.avisos.length ? `<div style="color:var(--text-muted);font-size:10px;margin-top:2px">${escHtmlGen(it.avisos.join(' · '))}</div>` : '';
-    const tesisCorta = it.tesis.length > 70 ? it.tesis.slice(0, 70) + '…' : it.tesis;
-    const fecha = it.creado ? new Date(it.creado).toLocaleDateString('es-AR') : 'hoy';
-    return `<tr><td ${td}><strong>${escHtmlGen(it.activo)}</strong></td><td ${td}>${escHtmlGen(CLASE_LABELS[it.clase] || '')}</td><td ${td}>${escHtmlGen(it.temporalidad)}</td>`
-      + `<td ${td}>${escHtmlGen(ESC_SESGOS[it.sesgo] || '')}</td><td ${td}>${escHtmlGen(ESC_ESTADOS[it.estado] || '')}</td><td ${td}>${escHtmlGen(fecha)}</td>`
-      + `<td ${td}>${escHtmlGen(it.entrada)}</td><td ${td}>${escHtmlGen(it.invalidacion)}</td><td ${td}>${escHtmlGen(it.objetivo)}</td>`
-      + `<td ${td}>${escHtmlGen(tesisCorta)}</td><td ${td}>${est}${av}</td></tr>`;
-  }).join('');
-  cont.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace"><thead><tr>`
-    + ['Activo', 'Clase', 'TF', 'Sesgo', 'Estado', 'Creado', 'Entrada', 'Invalidación', 'Objetivo', 'Tesis', 'Resultado'].map(h => `<th ${th}>${h}</th>`).join('')
-    + `</tr></thead><tbody>${filas}</tbody></table>`;
+    return est + av;
+  };
+  const tabla = (cabeceras, filas) => `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace;margin-bottom:10px"><thead><tr>`
+    + cabeceras.map(h => `<th ${th}>${h}</th>`).join('') + `</tr></thead><tbody>${filas}</tbody></table>`;
+  const esc = escPegadoItems.filter(i => i.tipo !== 'actualizacion');
+  const ups = escPegadoItems.filter(i => i.tipo === 'actualizacion');
+  let html = '';
+  if (esc.length) {
+    html += tabla(['Activo', 'Clase', 'TF', 'Sesgo', 'Estado', 'Creado', 'Entrada', 'Invalidación', 'Objetivo', 'Tesis', 'Resultado'], esc.map(it => {
+      const tesisCorta = it.tesis.length > 70 ? it.tesis.slice(0, 70) + '…' : it.tesis;
+      const fecha = it.creado ? new Date(it.creado).toLocaleDateString('es-AR') : 'hoy';
+      return `<tr><td ${td}><strong>${escHtmlGen(it.activo)}</strong></td><td ${td}>${escHtmlGen(CLASE_LABELS[it.clase] || '')}</td><td ${td}>${escHtmlGen(it.temporalidad)}</td>`
+        + `<td ${td}>${escHtmlGen(ESC_SESGOS[it.sesgo] || '')}</td><td ${td}>${escHtmlGen(ESC_ESTADOS[it.estado] || '')}</td><td ${td}>${escHtmlGen(fecha)}</td>`
+        + `<td ${td}>${escHtmlGen(it.entrada)}</td><td ${td}>${escHtmlGen(it.invalidacion)}</td><td ${td}>${escHtmlGen(it.objetivo)}</td>`
+        + `<td ${td}>${escHtmlGen(tesisCorta)}</td><td ${td}>${celdaRes(it)}</td></tr>`;
+    }).join(''));
+  }
+  if (ups.length) {
+    html += tabla(['Actualiza a', 'Fecha', 'Link', 'Nota', 'Resultado'], ups.map(it => {
+      const d = it.destino;
+      const dest = d ? (d.tipo === 'existente'
+        ? `${d.ref.activo} · ${d.ref.temporalidad || ''} · creado ${d.ref.creado ? new Date(d.ref.creado).toLocaleDateString('es-AR') : ''}`
+        : `${d.ref.activo} · ${d.ref.temporalidad || ''} (nuevo en este pegado)`) : it.activo;
+      const notaCorta = it.texto.length > 90 ? it.texto.slice(0, 90) + '…' : it.texto;
+      return `<tr><td ${td}><strong>${escHtmlGen(dest)}</strong></td><td ${td}>${escHtmlGen(new Date(it.fecha).toLocaleDateString('es-AR'))}</td>`
+        + `<td ${td}>${it.link ? 'con link' : ''}</td><td ${td}>${escHtmlGen(notaCorta)}</td><td ${td}>${celdaRes(it)}</td></tr>`;
+    }).join(''));
+  }
+  cont.innerHTML = html;
 }
 
 async function guardarPegadoEscenarios() {
@@ -3921,26 +4001,48 @@ async function guardarPegadoEscenarios() {
     return;
   }
   const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado);
-  if (!listos.length) { escPegadoMsg('✕ No hay escenarios listos para guardar', false); return; }
+  if (!listos.length) { escPegadoMsg('✕ No hay nada listo para guardar (mirá la columna Resultado)', false); return; }
   if (typeof window.peisysSetDoc !== 'function') { escPegadoMsg('✕ Puente PEI·SYS no disponible', false); return; }
   escPegadoGuardando = true;
   const btn = document.getElementById('esc-paste-guardar');
   if (btn) btn.style.opacity = '.5';
   const base = Date.now();
-  let ok = 0, fallo = 0;
-  for (let i = 0; i < listos.length; i++) {
-    const it = listos[i];
+  const ahora = new Date().toISOString();
+  let seq = 0, okEsc = 0, okUp = 0, fallo = 0;
+  const mapUp = u => ({ id: base + '-' + (seq++), fecha: u.fecha, texto: u.texto, link: u.link, registrado: ahora });
+  const nuevos = listos.filter(i => i.tipo !== 'actualizacion');
+  for (let i = 0; i < nuevos.length; i++) {
+    const it = nuevos[i];
     const id = String(base + i);
-    const ahora = new Date().toISOString();
+    const ups = (it.updatesPegado || []).map(mapUp);
     const e = { creado: it.creado || ahora, actualizado: ahora, activo: it.activo, clase: it.clase, temporalidad: it.temporalidad,
-      sesgo: it.sesgo, tesis: it.tesis, entrada: it.entrada, invalidacion: it.invalidacion, objetivo: it.objetivo, link: it.link, estado: it.estado };
+      sesgo: it.sesgo, tesis: it.tesis, entrada: it.entrada, invalidacion: it.invalidacion, objetivo: it.objetivo, link: it.link,
+      estado: it.estado, actualizaciones: ups };
     try {
       await window.peisysSetDoc('escenarios', id, e);
       escenariosData.push(Object.assign({ id }, e));
-      ok++;
+      okEsc++; okUp += ups.length;
     } catch (err) {
       fallo++;
       console.warn('guardarPegadoEscenarios falló', err);
+    }
+  }
+  // Actualizaciones a escenarios que ya existían: una sola escritura por escenario.
+  const grupos = new Map();
+  listos.filter(i => i.tipo === 'actualizacion' && i.destino && i.destino.tipo === 'existente').forEach(u => {
+    const ref = u.destino.ref;
+    if (!grupos.has(ref)) grupos.set(ref, []);
+    grupos.get(ref).push(u);
+  });
+  for (const [ref, lista] of grupos) {
+    const arr = (Array.isArray(ref.actualizaciones) ? ref.actualizaciones : []).concat(lista.map(mapUp));
+    try {
+      await window.peisysSetDoc('escenarios', ref.id, { actualizaciones: arr, actualizado: ahora });
+      ref.actualizaciones = arr; ref.actualizado = ahora;
+      okUp += lista.length;
+    } catch (err) {
+      fallo++;
+      console.warn('guardarPegadoEscenarios (actualizaciones) falló', err);
     }
   }
   escenariosData.sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0));
@@ -3950,11 +4052,15 @@ async function guardarPegadoEscenarios() {
     const ta = document.getElementById('esc-paste-texto');
     if (ta) ta.value = '';
     escPegadoItems = [];
+    escPegadoTexto = '';
     renderPegadoEscenarios();
-    escPegadoMsg(`✓ ${ok} escenario${ok === 1 ? '' : 's'} guardado${ok === 1 ? '' : 's'} ${new Date().toLocaleTimeString('es-AR')}`, true);
+    const partes = [];
+    if (okEsc) partes.push(`${okEsc} escenario${okEsc === 1 ? '' : 's'}`);
+    if (okUp) partes.push(`${okUp} actualizaci${okUp === 1 ? 'ón' : 'ones'}`);
+    escPegadoMsg(`✓ Guardado: ${partes.join(' y ')} ${new Date().toLocaleTimeString('es-AR')}`, true);
   } else {
     renderPegadoEscenarios();
-    escPegadoMsg(`✕ ${ok} guardados, ${fallo} fallaron: tocá Analizar de nuevo y reintentá (los ya guardados se omiten como duplicados)`, false);
+    escPegadoMsg(`✕ ${okEsc + okUp} guardados, ${fallo} fallaron: tocá Analizar de nuevo y reintentá (lo ya guardado se omite como duplicado)`, false);
   }
 }
 
@@ -3978,10 +4084,102 @@ function insertarPlantillaEscenario() {
   const ta = document.getElementById('esc-paste-texto');
   if (!ta) return;
   const hoy = new Date().toLocaleDateString('es-AR');
-  ta.value = `Activo: EUR/USD\nTemporalidad: 4H\nSesgo: Alcista\nEstado: Vigente\nCreado: ${hoy}\nEntrada: 1,0850 (zona 1,0840-1,0860)\nInvalidación: 1,0790\nObjetivo: 1,0950\nLink: https://www.tradingview.com/x/...\nTesis: Estructura, patrón y contexto, en una o varias líneas.\n---\nActivo: SPX\nTemporalidad: D1\nSesgo: Alcista\nInvalidación: Cierre diario bajo 5780\nTesis: Segundo escenario de ejemplo.`;
+  ta.value = `Activo: EUR/USD\nTemporalidad: 4H\nSesgo: Alcista\nEstado: Vigente\nCreado: ${hoy}\nEntrada: 1,0850 (zona 1,0840-1,0860)\nInvalidación: 1,0790\nObjetivo: 1,0950\nLink: https://www.tradingview.com/x/...\nTesis: Estructura, patrón y contexto, en una o varias líneas.\n---\nActivo: SPX\nTemporalidad: D1\nSesgo: Alcista\nInvalidación: Cierre diario bajo 5780\nTesis: Segundo escenario de ejemplo.\n---\nActualizar: EUR/USD\nFecha: ${hoy}\nLink: https://www.tradingview.com/x/...\nTexto: Nota corta de la actualización (se suma al escenario EUR/USD de arriba).`;
   previsualizarPegadoEscenarios();
   const st1 = document.getElementById('esc-paste-status');
   if (st1) st1.textContent = 'Plantilla insertada: reemplazá los datos de ejemplo · ' + st1.textContent;
+}
+
+// Última fecha de actualización (Date) de un escenario, o null.
+function escUltimaAct(e) {
+  let max = null;
+  (Array.isArray(e.actualizaciones) ? e.actualizaciones : []).forEach(u => { const d = new Date(u.fecha); if (!isNaN(d) && (!max || d > max)) max = d; });
+  return max;
+}
+
+function escToggleUp(id, abierto) { if (abierto) escUpAbiertos.add(id); else escUpAbiertos.delete(id); }
+function editarEscenario(id) { escEditandoId = id; escUpFormId = ''; renderEscenarios(); }
+function cancelarEdicionEscenario() { escEditandoId = ''; renderEscenarios(); }
+function abrirFormActualizacion(id) {
+  escUpFormId = id; escEditandoId = ''; renderEscenarios();
+  const t = document.getElementById('esc-up-texto'); if (t) t.focus();
+}
+function cancelarFormActualizacion() { escUpFormId = ''; renderEscenarios(); }
+
+async function guardarEdicionEscenario(id) {
+  const e = escenariosData.find(x => x.id === id);
+  if (!e) return;
+  const st = document.getElementById('esc-ed-status');
+  const msg = (t, ok) => { if (st) { st.style.color = ok ? 'var(--green)' : 'var(--red)'; st.textContent = t; } };
+  const v = k => (document.getElementById('esc-ed-' + k)?.value || '').trim();
+  const activo = v('activo'), tesis = v('tesis'), invalidacion = v('invalidacion');
+  if (!activo || !tesis || !invalidacion) { msg('✕ Activo, tesis e invalidación son obligatorios', false); return; }
+  const linkRaw = v('link'), link = linkSeguro(linkRaw);
+  if (linkRaw && !link) { msg('✕ El link debe empezar con http:// o https://', false); return; }
+  let creado = e.creado;
+  const fc = v('creado');
+  if (fc) {
+    const iso = escParseFecha(fc);
+    if (!iso) { msg('✕ Fecha inválida (usá dd/mm/aaaa)', false); return; }
+    if (!(e.creado && new Date(e.creado).toDateString() === new Date(iso).toDateString())) creado = iso;
+  }
+  if (typeof window.peisysSetDoc !== 'function') { msg('✕ Puente PEI·SYS no disponible', false); return; }
+  const cambios = { activo, clase: v('clase') || claseDeActivo(activo), temporalidad: v('tf') || e.temporalidad, sesgo: v('sesgo') || 'neutral',
+    tesis, entrada: v('entrada'), invalidacion, objetivo: v('objetivo'), link, creado, actualizado: new Date().toISOString() };
+  try {
+    await window.peisysSetDoc('escenarios', id, cambios);
+    Object.assign(e, cambios);
+    escEditandoId = '';
+    escenariosData.sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0));
+    renderEscenarios();
+  } catch (err) {
+    console.warn('guardarEdicionEscenario falló', err);
+    msg('✕ No se pudo guardar (revisá las reglas de Firestore)', false);
+  }
+}
+
+async function agregarActualizacionEscenario(id) {
+  const e = escenariosData.find(x => x.id === id);
+  if (!e) return;
+  const st = document.getElementById('esc-up-status');
+  const msg = (t, ok) => { if (st) { st.style.color = ok ? 'var(--green)' : 'var(--red)'; st.textContent = t; } };
+  const v = k => (document.getElementById(k)?.value || '').trim();
+  const texto = v('esc-up-texto'), linkRaw = v('esc-up-link'), link = linkSeguro(linkRaw);
+  if (!texto && !link) { msg('✕ Escribí una nota o pegá un link', false); return; }
+  if (linkRaw && !link) { msg('✕ El link debe empezar con http:// o https://', false); return; }
+  let fecha;
+  const fRaw = v('esc-up-fecha');
+  if (fRaw) { fecha = escParseFecha(fRaw); if (!fecha) { msg('✕ Fecha inválida (usá dd/mm/aaaa)', false); return; } }
+  else { const h = new Date(); fecha = new Date(h.getFullYear(), h.getMonth(), h.getDate(), 12).toISOString(); }
+  if (typeof window.peisysSetDoc !== 'function') { msg('✕ Puente PEI·SYS no disponible', false); return; }
+  const ahora = new Date().toISOString();
+  const arr = (Array.isArray(e.actualizaciones) ? e.actualizaciones : []).concat([{ id: String(Date.now()), fecha, texto, link, registrado: ahora }]);
+  try {
+    await window.peisysSetDoc('escenarios', id, { actualizaciones: arr, actualizado: ahora });
+    e.actualizaciones = arr; e.actualizado = ahora;
+    escUpFormId = ''; escUpAbiertos.add(id);
+    renderEscenarios();
+  } catch (err) {
+    console.warn('agregarActualizacionEscenario falló', err);
+    msg('✕ No se pudo guardar (revisá las reglas de Firestore)', false);
+  }
+}
+
+async function borrarActualizacionEscenario(id, uid) {
+  const e = escenariosData.find(x => x.id === id);
+  if (!e || typeof window.peisysSetDoc !== 'function') return;
+  if (!window.confirm('¿Borrar esta actualización?')) return;
+  const arr = (Array.isArray(e.actualizaciones) ? e.actualizaciones : []).filter(u => u.id !== uid);
+  const ahora = new Date().toISOString();
+  try {
+    await window.peisysSetDoc('escenarios', id, { actualizaciones: arr, actualizado: ahora });
+    e.actualizaciones = arr; e.actualizado = ahora;
+    renderEscenarios();
+  } catch (err) {
+    console.warn('borrarActualizacionEscenario falló', err);
+    const st = document.getElementById('esc-lista-status');
+    if (st) st.textContent = '✕ No se pudo borrar la actualización';
+  }
 }
 
 function renderEscenarios() {
@@ -4009,29 +4207,91 @@ function renderEscenarios() {
     cont.innerHTML = `<div style="color:var(--text-muted);font-size:12px;padding:12px 0">${escenariosData.length ? 'Ningún escenario coincide con el filtro.' : 'Sin escenarios todavía. Cargá el primero arriba.'}</div>`;
     return;
   }
+  const DIAS_SIN_REVISAR = 7;   // un escenario vigente sin actualizar más de N días se resalta
+  const hoy = new Date();
+  const fmt = iso => { const d = iso ? new Date(iso) : null; return d && !isNaN(d) ? d.toLocaleDateString('es-AR') : ''; };
   const colSesgo = { alcista: 'var(--green)', bajista: 'var(--red)', neutral: 'var(--text-muted)' };
   const campo = (lbl, val) => val ? `<div><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">${lbl}</div><div style="font-size:12px;font-family:'DM Mono',monospace">${escHtmlGen(val)}</div></div>` : '';
-  const btn = (id, est, txt) => `<button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px" onclick="cambiarEstadoEscenario('${escHtmlGen(id)}','${est}')">${txt}</button>`;
+  const estBtn = 'border:1px solid var(--border);border-radius:4px;padding:4px 10px;font-size:11px';
+  const btn = (id, est, txt) => `<button class="nav-btn" style="${estBtn}" onclick="cambiarEstadoEscenario('${escHtmlGen(id)}','${est}')">${txt}</button>`;
+  const btnFn = (txt, fn) => `<button class="nav-btn" style="${estBtn}" onclick="${fn}">${txt}</button>`;
+  const inp = (k, lbl, val) => `<div><label class="config-label" for="esc-ed-${k}">${lbl}</label><input id="esc-ed-${k}" class="config-input" value="${escHtmlGen(val || '')}"></div>`;
+  const sel = (k, lbl, opts, val) => `<div><label class="config-label" for="esc-ed-${k}">${lbl}</label><select id="esc-ed-${k}" class="config-input">${opts.map(([v, l]) => `<option value="${escHtmlGen(v)}"${v === val ? ' selected' : ''}>${escHtmlGen(l)}</option>`).join('')}</select></div>`;
   cont.innerHTML = lista.map(e => {
     const est = e.estado || 'vigente';
+    const idq = escHtmlGen(e.id);
     const link = linkSeguro(e.link);
-    const acciones = est === 'vigente'
-      ? btn(e.id,'cumplido','✓ Cumplido') + btn(e.id,'invalidado','✕ Invalidado') + btn(e.id,'archivado','Archivar')
-      : btn(e.id,'vigente','Reabrir') + (est !== 'archivado' ? btn(e.id,'archivado','Archivar') : '');
+    const ups = (Array.isArray(e.actualizaciones) ? e.actualizaciones : []).slice()
+      .sort((a, b) => (new Date(b.fecha) - new Date(a.fecha)) || String(b.registrado || '').localeCompare(String(a.registrado || '')));
+    const ult = escUltimaAct(e);
+    const refFecha = ult || (e.creado ? new Date(e.creado) : null);
+    const dias = refFecha && !isNaN(refFecha) ? diasEntre(refFecha, hoy) : null;
+    const viejo = est === 'vigente' && dias !== null && dias > DIAS_SIN_REVISAR;
+    const cuando = dias === null ? '' : (dias <= 0 ? 'hoy' : `hace ${dias} d`);
+    const chip = ups.length ? `Últ. actualización ${cuando}` : `Sin actualizaciones · creado ${cuando}`;
+    const acciones = (est === 'vigente'
+      ? btn(e.id, 'cumplido', '✓ Cumplido') + btn(e.id, 'invalidado', '✕ Invalidado') + btn(e.id, 'archivado', 'Archivar')
+      : btn(e.id, 'vigente', 'Reabrir') + (est !== 'archivado' ? btn(e.id, 'archivado', 'Archivar') : ''))
+      + btnFn('＋ Actualización', `abrirFormActualizacion('${idq}')`) + btnFn('Editar', `editarEscenario('${idq}')`);
+
+    const cuerpo = escEditandoId === e.id
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:10px">
+          ${inp('activo', 'Activo *', e.activo)}
+          ${sel('clase', 'Clase', Object.keys(CLASE_LABELS).map(c => [c, CLASE_LABELS[c]]), e.clase || 'otro')}
+          ${sel('tf', 'Temporalidad', ESC_TEMPORALIDADES.map(t => [t, t]), e.temporalidad || 'D1')}
+          ${sel('sesgo', 'Sesgo', Object.keys(ESC_SESGOS).map(k => [k, ESC_SESGOS[k]]), e.sesgo || 'neutral')}
+          ${inp('creado', 'Creado (dd/mm/aaaa)', fmt(e.creado))}
+        </div>
+        <div style="margin-bottom:10px"><label class="config-label" for="esc-ed-tesis">Tesis *</label><textarea id="esc-ed-tesis" class="config-input" rows="4">${escHtmlGen(e.tesis || '')}</textarea></div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:10px">
+          ${inp('entrada', 'Entrada', e.entrada)}${inp('invalidacion', 'Invalidación *', e.invalidacion)}${inp('objetivo', 'Objetivo', e.objetivo)}${inp('link', 'Link TradingView', e.link)}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+          ${btnFn('Guardar cambios', `guardarEdicionEscenario('${idq}')`)}${btnFn('Cancelar', 'cancelarEdicionEscenario()')}<span id="esc-ed-status" style="font-size:11px"></span>
+        </div>`
+      : `<div style="font-size:12px;margin-bottom:10px;white-space:pre-wrap">${escHtmlGen(e.tesis)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:10px">
+          ${campo('Entrada', e.entrada)}${campo('Invalidación', e.invalidacion)}${campo('Objetivo', e.objetivo)}
+          ${link ? `<div><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">TradingView</div><a href="${escHtmlGen(link)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--blue)">abrir gráfico ↗</a></div>` : ''}
+        </div>`;
+
+    const formUp = escUpFormId === e.id
+      ? `<div style="border:1px dashed var(--border);border-radius:4px;padding:10px;margin:10px 0">
+          <div style="display:grid;grid-template-columns:150px 1fr;gap:12px;margin-bottom:8px">
+            <div><label class="config-label" for="esc-up-fecha">Fecha</label><input id="esc-up-fecha" class="config-input" value="${escHtmlGen(fmt(hoy.toISOString()))}" placeholder="dd/mm/aaaa"></div>
+            <div><label class="config-label" for="esc-up-link">Link TradingView (opcional)</label><input id="esc-up-link" class="config-input" placeholder="https://www.tradingview.com/x/..."></div>
+          </div>
+          <label class="config-label" for="esc-up-texto">Nota</label>
+          <textarea id="esc-up-texto" class="config-input" rows="3" placeholder="Qué cambió: precio, estructura, niveles..."></textarea>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+            ${btnFn('Guardar actualización', `agregarActualizacionEscenario('${idq}')`)}${btnFn('Cancelar', 'cancelarFormActualizacion()')}<span id="esc-up-status" style="font-size:11px"></span>
+          </div>
+        </div>` : '';
+
+    const detalle = ups.length
+      ? `<details ${escUpAbiertos.has(e.id) ? 'open' : ''} ontoggle="escToggleUp('${idq}', this.open)" style="margin-top:8px">
+          <summary style="cursor:pointer;font-size:11px;color:var(--text-muted)">Actualizaciones (${ups.length})${ult ? ' · última ' + escHtmlGen(fmt(ult.toISOString())) : ''}</summary>
+          <div style="padding-top:6px">${ups.map(u => {
+            const ul = linkSeguro(u.link);
+            return `<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--border)">
+              <span style="font-size:11px;font-family:'DM Mono',monospace;color:var(--text-muted);min-width:78px">${escHtmlGen(fmt(u.fecha))}</span>
+              <div style="flex:1;font-size:12px;white-space:pre-wrap">${escHtmlGen(u.texto || '')}${ul ? ` <a href="${escHtmlGen(ul)}" target="_blank" rel="noopener noreferrer" style="color:var(--blue)">abrir gráfico ↗</a>` : ''}</div>
+              <button class="nav-btn" style="${estBtn};padding:2px 8px" title="Borrar esta actualización" onclick="borrarActualizacionEscenario('${idq}','${escHtmlGen(u.id)}')">✕</button>
+            </div>`;
+          }).join('')}</div></details>` : '';
+
     return `<div class="card" style="margin-bottom:10px;border-left:3px solid ${colSesgo[e.sesgo] || 'var(--border)'}">
       <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
         <strong style="font-size:14px">${escHtmlGen(e.activo)}</strong>
         <span class="badge">${escHtmlGen(CLASE_LABELS[e.clase] || 'Sin clasificar')}</span>
         <span class="badge">${escHtmlGen(e.temporalidad || '')}</span>
         <span style="font-size:11px;color:${colSesgo[e.sesgo] || 'var(--text-muted)'}">${escHtmlGen(ESC_SESGOS[e.sesgo] || '')}</span>
-        <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${escHtmlGen(ESC_ESTADOS[est] || est)} · ${e.creado ? new Date(e.creado).toLocaleDateString('es-AR') : ''}</span>
+        <span style="font-size:10px;color:${viejo ? 'var(--red)' : 'var(--text-muted)'}">${escHtmlGen(chip)}${viejo ? ' ⚠ sin revisar' : ''}</span>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">${escHtmlGen(ESC_ESTADOS[est] || est)} · ${escHtmlGen(fmt(e.creado))}</span>
       </div>
-      <div style="font-size:12px;margin-bottom:10px;white-space:pre-wrap">${escHtmlGen(e.tesis)}</div>
-      <div style="display:flex;flex-wrap:wrap;gap:20px;margin-bottom:10px">
-        ${campo('Entrada', e.entrada)}${campo('Invalidación', e.invalidacion)}${campo('Objetivo', e.objetivo)}
-        ${link ? `<div><div style="font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted)">TradingView</div><a href="${escHtmlGen(link)}" target="_blank" rel="noopener noreferrer" style="font-size:12px;color:var(--blue)">abrir gráfico ↗</a></div>` : ''}
-      </div>
+      ${cuerpo}
       <div style="display:flex;gap:6px;flex-wrap:wrap">${acciones}</div>
+      ${formUp}${detalle}
     </div>`;
   }).join('');
 }
