@@ -834,6 +834,7 @@ body {
   <button class="nav-btn" onclick="showTab('earnings', this); if(!earningsLoaded) initEarningsTab();">Earnings</button>
   <button class="nav-btn" onclick="showTab('historico', this); if(!historicoLoaded) initHistoricoTab();">Histórico</button>
   <button class="nav-btn" onclick="showTab('escenarios', this); renderEscenarios();">Escenarios</button>
+  <button class="nav-btn" onclick="showTab('riesgo', this); renderRiesgo();">Riesgo</button>
   <button class="nav-btn" onclick="showTab('config', this); initConfigTab();">⚙ Config</button>
 </div>
 
@@ -1398,6 +1399,73 @@ body {
         <div style="color:var(--text-muted);font-size:11px;font-family:'DM Mono',monospace">Cargando…</div>
       </div>
       <div class="rvol-disclaimer">No es un Sharpe Ratio de manual (ese usa retornos % contra una tasa libre de riesgo) — es media/desvío de R mensual, un proxy propio para ver si la consistencia mejora o empeora mes a mes. Rolling Alpha/Beta vs S&amp;P 500 quedan pendientes (ver CHANGELOG).</div>
+    </div>
+  </div>
+
+  <!-- ══ RIESGO TAB (nuevo 30/10/2026) ══ -->
+  <div id="tab-riesgo" class="tab-content">
+    <div class="section-title">Riesgo</div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Calculadora de tamaño de posición</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">unidades = riesgo USD ÷ (distancia al SL × valor por unidad)</span>
+      </div>
+      <div style="padding:8px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px">
+        <div><label class="config-label" for="rg-cuenta">Cuenta</label><select id="rg-cuenta" class="config-input" onchange="riesgoCambioCuenta()"></select></div>
+        <div><label class="config-label" for="rg-balance">Balance (USD)</label><input id="rg-balance" class="config-input" placeholder="10166,93" oninput="riesgoRecalcular()" onchange="riesgoGuardarBalance()"></div>
+        <div><label class="config-label" for="rg-activo">Activo</label><input id="rg-activo" class="config-input" placeholder="AUD/USD, USD/NZD, NZD/CAD, oro..." oninput="riesgoAutoTipo()"></div>
+        <div><label class="config-label" for="rg-dir">Dirección</label>
+          <select id="rg-dir" class="config-input" onchange="riesgoRecalcular()"><option value="long">Long</option><option value="short">Short</option></select></div>
+        <div><label class="config-label" for="rg-tipo">Tipo de cotización</label>
+          <select id="rg-tipo" class="config-input" onchange="riesgoRecalcular()">
+            <option value="usd">Cotizado en USD (EUR/USD, oro, petróleo…)</option>
+            <option value="usdbase">USD primero (USD/JPY, USD/NZD…)</option>
+            <option value="cruce">Cruce (NZD/CAD, EUR/JPY…)</option>
+          </select></div>
+        <div id="rg-cruce-wrap" style="display:none"><label class="config-label" for="rg-cruce">Moneda cotizada → USD</label><input id="rg-cruce" class="config-input" placeholder="0,72 (CAD→USD)" oninput="riesgoRecalcular()"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;padding-bottom:8px">
+        <div><label class="config-label" for="rg-entrada">Entrada</label><input id="rg-entrada" class="config-input" placeholder="0,71594" oninput="riesgoRecalcular()"></div>
+        <div><label class="config-label" for="rg-sl">Stop Loss</label><input id="rg-sl" class="config-input" placeholder="0,71710" oninput="riesgoRecalcular()"></div>
+        <div><label class="config-label" for="rg-tp">Take Profit (opcional)</label><input id="rg-tp" class="config-input" placeholder="0,71180" oninput="riesgoRecalcular()"></div>
+        <div><label class="config-label" for="rg-riesgo">Riesgo % de la cuenta</label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="rg-riesgo" class="config-input" style="width:80px" value="0,33" oninput="riesgoRecalcular()">
+            <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px" onclick="riesgoSetPct('0,33')">0,33</button>
+            <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px" onclick="riesgoSetPct('0,50')">0,50</button>
+            <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:6px 8px" onclick="riesgoSetPct('1')">1</button>
+          </div></div>
+      </div>
+      <div id="rg-resultado" style="padding:6px 0 4px 0;font-size:12px"></div>
+      <div class="config-hint">Valor por unidad: cotizado en USD = 1 · USD primero = 1 ÷ entrada · cruce = valor en USD de la moneda cotizada (ej. CAD→USD). Precios con coma o punto decimal. Redondeá hacia abajo según el mínimo de unidades de tu broker.</div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        <span>Guardar esta orden</span>
+        <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">se guarda en Firestore (colección riesgo_ordenes)</span>
+      </div>
+      <div style="padding:8px 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px">
+        <div><label class="config-label" for="rg-fecha">Fecha</label><input id="rg-fecha" class="config-input" placeholder="dd/mm/aaaa"></div>
+        <div><label class="config-label" for="rg-unidades">Unidades que usaste</label><input id="rg-unidades" class="config-input" placeholder="vacío = las calculadas" oninput="riesgoRecalcular()"></div>
+        <div><label class="config-label" for="rg-estado">Estado de la orden</label>
+          <select id="rg-estado" class="config-input"><option value="pendiente">Pendiente</option><option value="ejecutada">Ejecutada</option><option value="cancelada">Cancelada</option></select></div>
+        <div><label class="config-label" for="rg-sistema">Sistema</label>
+          <select id="rg-sistema" class="config-input"><option value="">—</option><option value="TESLA">TESLA</option><option value="MALETA">MALETA</option></select></div>
+        <div><label class="config-label" for="rg-tipo-op">Tipo</label>
+          <select id="rg-tipo-op" class="config-input"><option value="">—</option><option value="intraday">intraday</option><option value="scalping">scalping</option><option value="swing">swing</option></select></div>
+        <div><label class="config-label" for="rg-nota">Nota</label><input id="rg-nota" class="config-input" placeholder="opcional"></div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="riesgoGuardarOrden()">Guardar orden</button>
+        <span id="rg-status" style="font-size:11px"></span>
+      </div>
+      <div class="config-hint">El riesgo real se calcula con las unidades que usaste. Cada orden tiene dos botones para copiar al Excel: FECHA→RIESGO% (columnas B a J, no pisa fórmulas) y CUENTA + RIESGO REAL% + UNIDADES (columnas Q a S; agregá esas dos columnas nuevas a la tabla).</div>
+    </div>
+
+    <div class="card" style="margin-top:16px">
+      <div class="card-title"><span>Órdenes guardadas</span></div>
+      <div id="rg-lista" style="overflow-x:auto"></div>
     </div>
   </div>
 
@@ -2136,6 +2204,10 @@ let escPegadoTimer = null;
 let escEditandoId = '';        // escenario en edición (formulario dentro de la tarjeta)
 let escUpFormId = '';          // escenario con el formulario "Actualización" abierto
 let escUpAbiertos = new Set(); // escenarios con la línea de tiempo desplegada
+let riesgoOrdenes = [];        // pestaña Riesgo: órdenes guardadas (Firestore 'riesgo_ordenes')
+let riesgoBalances = {};       // pestaña Riesgo: balance por cuenta (clave 'cmc_demo', etc.)
+let riesgoGuardando = false;   // evita doble guardado
+let riesgoUltimoCalc = null;   // último cálculo válido {p, r}
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -2836,6 +2908,15 @@ function parseRiesgo(valor) {
   return (tienePct || n >= 0.1) ? n / 100 : n;
 }
 
+// RIESGO de un trade para el % de cuenta: usa la columna "RIESGO REAL%" si está cargada; si no, el RIESGO% planificado.
+function riesgoDeTrade(t) {
+  const keys = Object.keys(t);
+  const kReal = keys.find(k => /riesgo\s*real/i.test(k));
+  if (kReal) { const v = parseRiesgo(t[kReal]); if (v !== null) return v; }
+  const kPlan = keys.find(k => /riesgo/i.test(k) && !/real/i.test(k));
+  return kPlan ? parseRiesgo(t[kPlan]) : null;
+}
+
 function agruparPorMes(data, anio) {
   const meses = MESES_ABREV.map(() => ({ r: 0, pct: 0, trades: 0, ganadas: 0, perdidas: 0, sinRiesgo: 0 }));
   data.forEach(t => {
@@ -2854,7 +2935,7 @@ function agruparPorMes(data, anio) {
     if (res === 'GANADA') m.ganadas++;
     if (res === 'PERDIDA') m.perdidas++;
 
-    const riesgo = parseRiesgo(col(t, 'riesgo'));
+    const riesgo = riesgoDeTrade(t);
     if (riesgo === null) m.sinRiesgo++;
     else m.pct += pnl * riesgo * 100; // R × riesgo% = % real de cuenta
   });
@@ -2940,8 +3021,8 @@ function renderResumenMensual() {
       </div>
     </div>
     <div style="font-size:9px;color:var(--text-muted);line-height:1.5;margin-top:10px;border-top:1px solid var(--divider);padding-top:8px">
-      El % de cuenta se calcula por trade como P&amp;L(R) × RIESGO% de esa operación, no con un riesgo fijo — por eso es fiel aunque mezcles 0,33% y 1%.
-      ${faltanRiesgo ? `<br>⚠ ${faltanRiesgo} trade(s) de ${anio} sin columna RIESGO% cargada: suman en R pero no en %.` : ''}
+      El % de cuenta se calcula por trade como P&amp;L(R) × riesgo de esa operación (RIESGO REAL% si está cargado; si no, el RIESGO% planificado), no con un riesgo fijo — por eso es fiel aunque mezcles 0,33% y 1%.
+      ${faltanRiesgo ? `<br>⚠ ${faltanRiesgo} trade(s) de ${anio} sin RIESGO% cargado: suman en R pero no en %.` : ''}
     </div>`;
 }
 
@@ -3620,6 +3701,327 @@ function abrirTicker(sitio) {
   };
   if (urls[sitio]) window.open(urls[sitio], '_blank', 'noopener,noreferrer');
 }
+
+// ══ RIESGO — cálculo de tamaño de posición (funciones puras) ══
+function riesgoNum(s) {
+  if (s === null || s === undefined) return NaN;
+  let t = String(s).trim().replace(/\s/g, '');
+  if (!t) return NaN;
+  const c = t.lastIndexOf(','), d = t.lastIndexOf('.');
+  if (c >= 0 && d >= 0) {
+    t = (c > d) ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '');
+  } else if (c >= 0) {
+    t = t.replace(',', '.');
+  }
+  if (!/^-?\d+\.?\d*$|^-?\.\d+$/.test(t)) return NaN;
+  return parseFloat(t);
+}
+
+function riesgoLetras(a) {
+  return String(a || '').toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+function riesgoTipoDeActivo(a) {
+  const s = riesgoLetras(a);
+  if (s.length !== 6 || /OIL|XAU|XAG|XPT|XPD/.test(s)) return 'usd';
+  if (s.slice(3) === 'USD') return 'usd';
+  if (s.slice(0, 3) === 'USD') return 'usdbase';
+  return 'cruce';
+}
+
+function riesgoEsFx(a) {
+  const s = riesgoLetras(a);
+  return s.length === 6 && !/OIL|XAU|XAG|XPT|XPD/.test(s);
+}
+
+function riesgoRedondear(u) {
+  if (!(u > 0)) return 0;
+  return u < 100 ? Math.floor(u * 100 + 1e-9) / 100 : Math.floor(u + 1e-9);
+}
+
+function riesgoCalcular(p) {
+  const r = { ok: false, err: '' };
+  if (!(p.balance > 0)) { r.err = 'Falta el balance de la cuenta.'; return r; }
+  if (!(p.riesgoPct > 0)) { r.err = 'Falta el riesgo %.'; return r; }
+  if (!(p.entrada > 0) || !(p.sl > 0)) { r.err = 'Completá entrada y stop loss.'; return r; }
+  const long = p.dir !== 'short';
+  if (long && !(p.sl < p.entrada)) { r.err = 'En long el stop loss tiene que estar por debajo de la entrada.'; return r; }
+  if (!long && !(p.sl > p.entrada)) { r.err = 'En short el stop loss tiene que estar por encima de la entrada.'; return r; }
+  if (p.tp > 0) {
+    if (long && !(p.tp > p.entrada)) { r.err = 'En long el take profit tiene que estar por encima de la entrada.'; return r; }
+    if (!long && !(p.tp < p.entrada)) { r.err = 'En short el take profit tiene que estar por debajo de la entrada.'; return r; }
+  }
+  let valor = 1;
+  if (p.tipo === 'usdbase') valor = 1 / p.entrada;
+  else if (p.tipo === 'cruce') {
+    if (!(p.cruce > 0)) { r.err = 'Es un cruce: falta el valor en USD de la moneda cotizada (ej. CAD→USD).'; return r; }
+    valor = p.cruce;
+  }
+  const dist = Math.abs(p.entrada - p.sl);
+  const riesgoUSD = p.balance * p.riesgoPct / 100;
+  const unidadesExactas = riesgoUSD / (dist * valor);
+  const unidades = riesgoRedondear(unidadesExactas);
+  r.ok = true;
+  r.valor = valor; r.dist = dist; r.riesgoUSD = riesgoUSD;
+  r.unidadesExactas = unidadesExactas; r.unidades = unidades;
+  r.rr = (p.tp > 0) ? Math.abs(p.tp - p.entrada) / dist : null;
+  r.gananciaTP = (p.tp > 0) ? unidades * Math.abs(p.tp - p.entrada) * valor : null;
+  r.lotes = p.esFx ? unidades / 100000 : null;
+  r.balance = p.balance; r.riesgoPct = p.riesgoPct;
+  return r;
+}
+
+function riesgoDeUnidades(calc, unidades) {
+  const usd = unidades * calc.dist * calc.valor;
+  return { usd: usd, pct: usd / calc.balance * 100 };
+}
+
+// ══ RIESGO — pestaña (pantalla, guardado y copiado para Excel) ══
+function riesgoKey(c) { return String(c || '').toLowerCase().replace(/[^a-z0-9]+/g, '_'); }
+function riesgoEl(id) { return document.getElementById(id); }
+function riesgoVal(id) { const e = riesgoEl(id); return e ? e.value : ''; }
+function riesgoFmt(n, dec) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return n.toLocaleString('es-AR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function riesgoComa(n) { return (n === null || n === undefined || isNaN(n)) ? '' : String(n).replace('.', ','); }
+function riesgoHoy() {
+  const d = new Date(), p = x => String(x).padStart(2, '0');
+  return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear();
+}
+function riesgoFechaNorm(s) {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(String(s || '').trim());
+  if (!m) return null;
+  const d = +m[1], mo = +m[2], y = +m[3], dt = new Date(y, mo - 1, d);
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo - 1 || dt.getDate() !== d) return null;
+  return String(d).padStart(2, '0') + '/' + String(mo).padStart(2, '0') + '/' + y;
+}
+function riesgoStatus(t, ok) {
+  const s = riesgoEl('rg-status'); if (!s) return;
+  s.textContent = t;
+  s.style.color = ok ? 'var(--green)' : 'var(--red)';
+}
+
+function riesgoLeer() {
+  const activo = riesgoVal('rg-activo').trim();
+  const tp = riesgoNum(riesgoVal('rg-tp'));
+  return {
+    cuenta: riesgoVal('rg-cuenta'), activo: activo,
+    balance: riesgoNum(riesgoVal('rg-balance')),
+    riesgoPct: riesgoNum(riesgoVal('rg-riesgo')),
+    entrada: riesgoNum(riesgoVal('rg-entrada')),
+    sl: riesgoNum(riesgoVal('rg-sl')),
+    tp: isNaN(tp) ? 0 : tp,
+    dir: riesgoVal('rg-dir'), tipo: riesgoVal('rg-tipo'),
+    cruce: riesgoNum(riesgoVal('rg-cruce')),
+    esFx: riesgoEsFx(activo)
+  };
+}
+
+function riesgoRecalcular() {
+  const wrap = riesgoEl('rg-cruce-wrap');
+  if (wrap) wrap.style.display = riesgoVal('rg-tipo') === 'cruce' ? '' : 'none';
+  const out = riesgoEl('rg-resultado'); if (!out) return;
+  const p = riesgoLeer();
+  const r = riesgoCalcular(p);
+  riesgoUltimoCalc = r.ok ? { p: p, r: r } : null;
+  if (!r.ok) {
+    const vacio = !riesgoVal('rg-entrada').trim() && !riesgoVal('rg-sl').trim();
+    out.innerHTML = '<span style="color:var(--text-muted)">' +
+      (vacio ? 'Completá balance, entrada y stop loss para ver las unidades.' : escHtmlGen(r.err)) + '</span>';
+    return;
+  }
+  let color = 'var(--green)', aviso = 'Dentro de tu rango habitual (0,33–0,50%).';
+  if (p.riesgoPct > 1) { color = 'var(--red)'; aviso = 'Supera el 1% por operación.'; }
+  else if (p.riesgoPct > 0.5) { color = 'var(--yellow)'; aviso = 'Por encima de tu rango de 0,33–0,50% (hasta 1% solo como excepción).'; }
+  const fila = (k, v) => `<tr><td style="padding:3px 16px 3px 0;color:var(--text-muted)">${k}</td><td style="padding:3px 0">${v}</td></tr>`;
+  let h = `<div style="border-left:3px solid ${color};padding:6px 12px">`;
+  h += `<div style="font-size:11px;color:${color};margin-bottom:6px">${aviso}</div>`;
+  h += `<table style="font-size:12px;font-family:'DM Mono',monospace">`;
+  h += fila('Riesgo en USD', riesgoFmt(r.riesgoUSD, 2));
+  h += fila('Distancia al SL', riesgoFmt(r.dist, 6));
+  h += fila('Valor por unidad (USD)', riesgoFmt(r.valor, 6));
+  h += fila('Unidades exactas', riesgoFmt(r.unidadesExactas, 2));
+  h += fila('<b>Unidades a usar</b>', `<b style="font-size:15px">${riesgoFmt(r.unidades, r.unidades < 100 ? 2 : 0)}</b>`);
+  if (r.lotes !== null) h += fila('Lotes (100.000 u. = 1)', riesgoFmt(r.lotes, 5));
+  if (r.rr !== null) h += fila('R/R', riesgoFmt(r.rr, 2) + ' · ganancia al TP ≈ ' + riesgoFmt(r.gananciaTP, 2) + ' USD');
+  const uTxt = riesgoVal('rg-unidades').trim();
+  if (uTxt) {
+    const u = riesgoNum(uTxt);
+    if (isNaN(u) || u <= 0) h += fila('Con tus unidades', '<span style="color:var(--red)">número inválido</span>');
+    else {
+      const d = riesgoDeUnidades(r, u);
+      const c2 = d.pct > 1 ? 'var(--red)' : (d.pct > 0.5 ? 'var(--yellow)' : 'var(--green)');
+      h += fila('Con tus ' + riesgoFmt(u, u < 100 ? 2 : 0) + ' u.', `<span style="color:${c2}">riesgo real ${riesgoFmt(d.usd, 2)} USD (${riesgoFmt(d.pct, 3)}%)</span>`);
+    }
+  }
+  h += '</table></div>';
+  out.innerHTML = h;
+}
+
+function riesgoAutoTipo() {
+  const sel = riesgoEl('rg-tipo');
+  if (sel && riesgoVal('rg-activo').trim()) sel.value = riesgoTipoDeActivo(riesgoVal('rg-activo'));
+  riesgoRecalcular();
+}
+function riesgoSetPct(v) { const e = riesgoEl('rg-riesgo'); if (e) e.value = v; riesgoRecalcular(); }
+
+function riesgoCambioCuenta() {
+  const e = riesgoEl('rg-balance');
+  if (e) e.value = riesgoBalances[riesgoKey(riesgoVal('rg-cuenta'))] || '';
+  riesgoRecalcular();
+}
+
+async function riesgoGuardarBalance() {
+  const k = riesgoKey(riesgoVal('rg-cuenta'));
+  const v = riesgoVal('rg-balance').trim();
+  if (v && isNaN(riesgoNum(v))) { riesgoStatus('✕ Balance inválido, no se guardó', false); return; }
+  riesgoBalances[k] = v;
+  try { localStorage.setItem('riesgo_balances', JSON.stringify(riesgoBalances)); } catch (e) {}
+  if (typeof window.peisysSetDoc !== 'function') { riesgoStatus('Balance guardado solo en este navegador', false); return; }
+  try {
+    await window.peisysSetDoc('riesgo_config', 'balances', riesgoBalances);
+    riesgoStatus('✓ Balance guardado (' + riesgoVal('rg-cuenta') + ')', true);
+  } catch (e) {
+    riesgoStatus('✕ Balance solo en este navegador: ' + e.message, false);
+  }
+}
+
+async function riesgoGuardarOrden() {
+  if (riesgoGuardando) return;
+  const c = riesgoUltimoCalc;
+  if (!c) { riesgoStatus('✕ Primero completá el cálculo sin errores', false); return; }
+  const p = c.p, r = c.r;
+  if (!p.activo) { riesgoStatus('✕ Falta el activo', false); return; }
+  const fecha = riesgoFechaNorm(riesgoVal('rg-fecha'));
+  if (!fecha) { riesgoStatus('✕ Fecha inválida (formato dd/mm/aaaa)', false); return; }
+  const uTxt = riesgoVal('rg-unidades').trim();
+  const unidades = uTxt ? riesgoNum(uTxt) : r.unidades;
+  if (!(unidades > 0)) { riesgoStatus('✕ Unidades inválidas', false); return; }
+  if (typeof window.peisysSetDoc !== 'function') { riesgoStatus('✕ Puente PEI·SYS no disponible', false); return; }
+  const real = riesgoDeUnidades(r, unidades);
+  const ahora = new Date().toISOString();
+  const id = Date.now().toString();
+  const o = {
+    fecha: fecha, activo: p.activo, dir: p.dir, cotizacion: p.tipo, cuenta: p.cuenta,
+    entrada: p.entrada, sl: p.sl, tp: p.tp > 0 ? p.tp : null,
+    cruce: p.tipo === 'cruce' ? p.cruce : null,
+    balance: p.balance, riesgoPlanPct: p.riesgoPct,
+    unidadesCalc: r.unidades, unidades: unidades,
+    riesgoRealUSD: Math.round(real.usd * 100) / 100,
+    riesgoRealPct: Math.round(real.pct * 10000) / 10000,
+    estado: riesgoVal('rg-estado'), sistema: riesgoVal('rg-sistema'), tipoOp: riesgoVal('rg-tipo-op'),
+    nota: riesgoVal('rg-nota').trim(), creado: ahora, actualizado: ahora
+  };
+  riesgoGuardando = true;
+  try {
+    await window.peisysSetDoc('riesgo_ordenes', id, o);
+    riesgoOrdenes.unshift(Object.assign({ id: id }, o));
+    riesgoStatus('✓ Orden guardada', true);
+    riesgoRenderLista();
+  } catch (e) {
+    riesgoStatus('✕ No se pudo guardar: ' + e.message, false);
+  }
+  riesgoGuardando = false;
+}
+
+async function riesgoCambiarEstado(id, estado) {
+  const o = riesgoOrdenes.find(x => x.id === id);
+  if (!o || typeof window.peisysSetDoc !== 'function') return;
+  const ahora = new Date().toISOString();
+  try {
+    await window.peisysSetDoc('riesgo_ordenes', id, { estado: estado, actualizado: ahora });
+    o.estado = estado; o.actualizado = ahora;
+    riesgoStatus('✓ Estado actualizado', true);
+  } catch (e) {
+    riesgoStatus('✕ No se pudo actualizar: ' + e.message, false);
+  }
+  riesgoRenderLista();
+}
+
+function riesgoRenderLista() {
+  const cont = riesgoEl('rg-lista'); if (!cont) return;
+  if (!riesgoOrdenes.length) {
+    cont.innerHTML = '<div style="color:var(--text-muted);font-size:12px;padding:8px 0">Todavía no guardaste órdenes.</div>';
+    return;
+  }
+  const th = t => `<th style="text-align:left;padding:4px 10px;color:var(--text-muted);font-weight:normal;white-space:nowrap">${t}</th>`;
+  const td = t => `<td style="padding:4px 10px;white-space:nowrap">${t}</td>`;
+  let h = `<table style="width:100%;border-collapse:collapse;font-size:11px;font-family:'DM Mono',monospace"><thead><tr>` +
+    ['Fecha', 'Activo', 'Dir', 'Entrada', 'SL', 'TP', 'Unidades', 'Riesgo real', 'Cuenta', 'Estado', 'Excel'].map(th).join('') + '</tr></thead><tbody>';
+  riesgoOrdenes.forEach(o => {
+    const ids = escHtmlGen(o.id);
+    const pctR = o.riesgoRealPct;
+    const cR = pctR > 1 ? 'var(--red)' : (pctR > 0.5 ? 'var(--yellow)' : 'var(--green)');
+    const sel = `<select class="config-input" style="padding:2px 4px;font-size:11px" onchange="riesgoCambiarEstado('${ids}', this.value)">` +
+      ['pendiente', 'ejecutada', 'cancelada'].map(s => `<option value="${s}"${o.estado === s ? ' selected' : ''}>${s}</option>`).join('') + '</select>';
+    const btn = (t, f) => `<button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:3px 8px;font-size:10px" onclick="${f}('${ids}')">${t}</button>`;
+    h += '<tr style="border-top:1px solid var(--border)">' +
+      td(escHtmlGen(o.fecha)) + td(escHtmlGen(o.activo)) + td(o.dir === 'short' ? 'SHORT' : 'LONG') +
+      td(escHtmlGen(riesgoComa(o.entrada))) + td(escHtmlGen(riesgoComa(o.sl))) + td(o.tp ? escHtmlGen(riesgoComa(o.tp)) : '—') +
+      td(riesgoFmt(o.unidades, o.unidades < 100 ? 2 : 0)) +
+      td(`<span style="color:${cR}">${riesgoFmt(o.riesgoRealUSD, 2)} USD · ${riesgoFmt(pctR, 3)}%</span>`) +
+      td(escHtmlGen(o.cuenta)) + td(sel) +
+      td(btn('B→J', 'riesgoCopiarFila') + ' ' + btn('Q→S', 'riesgoCopiarCuenta')) + '</tr>';
+    if (o.nota) h += `<tr><td colspan="11" style="padding:0 10px 6px 10px;color:var(--text-muted)">${escHtmlGen(o.nota)}</td></tr>`;
+  });
+  cont.innerHTML = h + '</tbody></table>';
+}
+
+// Columnas B a J del Excel: FECHA, ACTIVO, SISTEMA, TIPO, DIR, ENTRADA, SL, TP, RIESGO%
+function riesgoFilaExcel(o) {
+  return [o.fecha, o.activo, o.sistema || '', o.tipoOp || '', o.dir === 'short' ? 'SHORT' : 'LONG',
+    riesgoComa(o.entrada), riesgoComa(o.sl), o.tp ? riesgoComa(o.tp) : '',
+    riesgoComa(o.riesgoPlanPct) + '%'].join('\t');
+}
+// Columnas Q a S: CUENTA, RIESGO REAL%, UNIDADES
+function riesgoCuentaExcel(o) {
+  return [o.cuenta || '', riesgoComa(o.riesgoRealPct) + '%', riesgoComa(o.unidades)].join('\t');
+}
+
+async function riesgoCopiar(texto, que) {
+  try {
+    await navigator.clipboard.writeText(texto);
+    riesgoStatus('✓ Copiado (' + que + '). Pegalo en la primera celda de esas columnas.', true);
+  } catch (e) {
+    const ta = document.createElement('textarea');
+    ta.value = texto; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (e2) {}
+    document.body.removeChild(ta);
+    riesgoStatus(ok ? '✓ Copiado (' + que + '). Pegalo en la primera celda de esas columnas.' : '✕ No se pudo copiar', ok);
+  }
+}
+function riesgoCopiarFila(id) { const o = riesgoOrdenes.find(x => x.id === id); if (o) riesgoCopiar(riesgoFilaExcel(o), 'FECHA→RIESGO%'); }
+function riesgoCopiarCuenta(id) { const o = riesgoOrdenes.find(x => x.id === id); if (o) riesgoCopiar(riesgoCuentaExcel(o), 'CUENTA + RIESGO REAL% + UNIDADES'); }
+
+async function initRiesgo() {
+  const sel = riesgoEl('rg-cuenta');
+  if (sel && !sel.options.length) {
+    sel.innerHTML = ['CMC Demo', 'MT5 Demo', 'CMC Live', 'MT5 Live'].map(c => `<option value="${c}">${c}</option>`).join('');
+  }
+  const f = riesgoEl('rg-fecha'); if (f && !f.value) f.value = riesgoHoy();
+  try {
+    const g = localStorage.getItem('riesgo_balances');
+    if (g) riesgoBalances = JSON.parse(g) || {};
+  } catch (e) {}
+  if (typeof window.peisysGetCollection === 'function') {
+    try {
+      const cfg = await window.peisysGetCollection('riesgo_config');
+      if (cfg && cfg.balances) riesgoBalances = Object.assign({}, riesgoBalances, cfg.balances);
+      const col = await window.peisysGetCollection('riesgo_ordenes');
+      riesgoOrdenes = Object.entries(col || {}).map(([id, o]) => Object.assign({ id: id }, o))
+        .sort((a, b) => new Date(b.creado || 0) - new Date(a.creado || 0));
+    } catch (e) {
+      console.warn('initRiesgo: no se pudo cargar', e);
+    }
+  }
+  riesgoCambioCuenta();
+  riesgoRenderLista();
+}
+
+function renderRiesgo() { riesgoRecalcular(); riesgoRenderLista(); }
 
 // ══════════════════════════════════════
 // ESCENARIOS — análisis estructurados (activo, tesis, niveles, invalidación, estado)
@@ -6432,6 +6834,7 @@ initAutoSync();
     if (typeof window.actualizarResumenPEISYS === 'function') window.actualizarResumenPEISYS();
     initBitacoraAnalisis();
     initEscenarios();
+    initRiesgo();
   });
 </script>
 </body>
