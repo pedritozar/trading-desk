@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-10-22 (sesión Cowork, 6ta — fix TDZ #3, clase de activo, tab Escenarios, tanda 2: duración de trades + links por ticker; 5 commits locales, falta push)
+**Última actualización:** 2026-10-30 (sesión Cowork, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -44,9 +44,14 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 `showTab()` usaba `event.target` sin recibirlo como argumento — Chrome lo tolera, Safari no lo garantiza en el mismo call path, y cuando falla corta el `onclick` a mitad de camino (mismo síntoma que los puntos 1 y 2: paneles que nunca cargan, sin relación con el bug real).
 - **Regla fija:** todo handler recibe lo que necesita como argumento explícito (`onclick="fn(this)"`), nunca asume que un global del browser (`event`, `window.event`) va a estar disponible — y probar en Safari además de Chrome antes de dar un fix por confirmado.
 
+### 5. No afirmar "hecho" sin leer el resultado de la escritura (nueva 30/10)
+El 30/10 una corrección del CHANGELOG falló en silencio (el texto ancla no coincidía → `AssertionError`, commit vacío) y yo ya había dicho que estaba hecha. Pedro lo habría descubierto tarde.
+- **Regla fija:** después de editar un archivo con un script, volver a leer las líneas cambiadas (o `grep`) y mostrar el resultado real antes de decir "hecho". Un `assert` que falla no cuenta como cambio. Mismo criterio con `git commit` (mirar `git log`/`git status`) y con cualquier push: se confirma con la salida real de Pedro (`d6c6499..e62f0c9`), no con lo que se esperaba.
+- Corolario del mismo día: **nunca pegar texto en el modal "Pegar CSV" de Trades** salvo un CSV de trades (`parseCSV()` pisa `trades` y `pei_csv_backup` con cualquier cosa; guard pendiente abajo).
+
 ---
 
-## Sesión 2026-10-30 (Cowork, 7ma) — Pegado de escenarios (texto/CSV) + diagnóstico de borrado de historial en Safari — commit local SIN pushear
+## Sesión 2026-10-30 (Cowork, 7ma) — Pegado de escenarios (texto/CSV) + actualizaciones/Editar + carga histórica de Notion + diagnóstico de borrado de historial en Safari — CERRADA, pusheada 30/10 (`d6c6499..e62f0c9`)
 
 Contexto: Pedro mostró (30/10) capturas del dashboard en su navegador real: la pestaña **Escenarios** y la card **Clase de activo** en Config ya aparecen tras el push del 22/10, pero el pie decía **"Sin datos cargados"** y la card de Clase pedía cargar el CSV → el CSV (`pei_csv_backup`, localStorage) se había borrado. Pedro suele **borrar el historial de Safari (no el caché)**.
 
@@ -64,7 +69,21 @@ Contexto: Pedro mostró (30/10) capturas del dashboard en su navegador real: la 
 - **Cambio en la clave de duplicado (`escClave`)**: si el bloque trae `Creado:` explícito, el **día** forma parte de la clave → dos análisis del mismo par y sesgo en fechas distintas ya no se marcan como duplicado (EUR/USD 23/02 y 10/03, GOLD 01/03 y 16/03, USD/MXN 02/06 y 17/06). Sin `Creado:` todo sigue igual (probado: t9 11/11 sin falsos duplicados, re-pegar = 11 duplicados, regresión t5–t8 OK). `check_folder.sh`: se agregó el .txt a la lista blanca.
 - **Verificación (jsdom, `$HOME/scratch/jd/t8.js`, 49 checks OK / 0 fallas) + regresiones t3–t7 sin errores; `node --check` OK en ambos `<script>`.** Aprendizaje de herramienta: `device_bash` rechaza comandos muy largos (E2BIG) → scripts grandes en fragmentos `cat > fichero <<'EOF'`.
 
-## Sesión 2026-10-22 (Cowork, 6ta) — Fix TDZ #3 + clase de activo + tab Escenarios + tanda 2 (duración, links por ticker) — CERRADA, commits locales SIN pushear
+### Cierre de la sesión 30/10 — estado final y qué sigue (para el próximo chat)
+
+*Cerrado: 2026-10-30 ~15:40 ARG, Cowork (Claude Sonnet 5.5). Pusheado por Pedro: `d6c6499..e62f0c9` (`0bde108`, `46e30e4`, `b55f862`, `e62f0c9`). Control de carpeta exhaustivo hecho al cierre: árbol limpio, local = origin, `index.html` byte a byte igual a la fuente, `check_folder.sh` ✅, `contrseña mt5.png` ignorado por `.gitignore` (no trackeado). CHANGELOG en ~520 líneas → **no hace falta podar** (umbral ~1000). Qué ya NO está pendiente: pegado de escenarios, actualizaciones, Editar, bloque `Actualizar:`, histórico de Notion (todo hecho y pusheado; falta solo que Pedro lo pruebe).*
+
+**Orden sugerido para el próximo chat (adjuntar este CHANGELOG):**
+1. **Pedro prueba en el navegador real** (recarga dura Cmd+Shift+R): (a) Editar GBPCHF → Creado `02/10/2026`; (b) pegar `ESCENARIOS_historicos_notion_30-10.txt` (debe decir "11 listos") + Guardar, filtro de estado en "todos"; (c) tarjeta con "＋ Actualización". Si algo falla, captura.
+2. **Cargar las actualizaciones de GBPCHF** (02/10, 15/10, 29/10, 30/10) con bloques `Actualizar:`: Claude necesita el texto de cada una + link de TradingView (están en la página de GBPCHF en Notion; las páginas de la base "Análisis TradingView" leídas por API tienen el cuerpo vacío, así que hay que copiarlas a mano o pasar capturas).
+3. **Respuestas de Pedro pendientes:** stop de GBPCHF = 1,08390 (había tipeado 1,08930) · USD/MXN 17/06 (Resultado SL pero Cumplió ✅ Sí: se cargó invalidado) · GBP/CAD: el 1er escenario (19/03 → TP 25/03) ¿fue trade real? (si sí, va al CSV de trades) · EUR/USD 10/03 "4H/D1" (se cargó 4H) · **criterio de "tasa de acierto analítico":** GOLD 16/03 y USD/OIL 27/03 se cargaron `invalidado` (SL tocado) aunque Pedro anotó "análisis correcto / Cumplió Parcial"; el resumen de acierto del tab los cuenta como fallo → decidir si "Parcial" debe contar como acierto (o llevar un estado/etiqueta aparte).
+4. **Decisiones de diseño sin OK todavía:** guard de `parseCSV()` (exigir FECHA+ACTIVO) · blindaje contra borrado de historial de Safari (auto-respaldo a Firestore de CSV + ajustes + historial Commodities/Bonos, sin API keys; export/import JSON; aviso si no hay datos; tip Mac: Option + "Clear History and Keep Website Data", a verificar) · Escenarios como "actividad de gestor" (recomendación: solo para la alerta de ausencia).
+5. **6 trades de agosto de Notion:** confirmar cuáles se ejecutaron en el broker y cuáles son de papel + Entrada/SL/TP + sistema/tipo (swing = MALETA; Notion los marca todos TESLA). Mantener Excel/Notion/CSV al día.
+6. **Notion, fila GBPCHF:** quedó con Cuenta "SIN entrada oficial", Estado "EN CURSO", Cumplió "Parcial", Sistema TESLA (un swing debería ser MALETA) → ajustar a mano.
+7. **Higiene técnica:** (a) `deploy.sh` hace `git push origin main || git push origin main --force` → el `--force` de respaldo puede pisar GitHub: sacarlo (no se tocó); para este tipo de pushes usar `git push origin main` a mano; (b) restos de git creados desde la carpeta montada en Cowork (26 archivos `.git/stale-*` y ~53 `.git/objects/*/tmp_obj_*`): inofensivos, pero se pueden limpiar desde la Terminal de la Mac con git cerrado (`rm .git/stale-*` y `find .git/objects -name 'tmp_obj_*' -delete`) — no hacerlo con git corriendo; (c) los tests de la sesión (jsdom `t3`–`t9`, Playwright) viven **fuera del repo** en la VM de Cowork (`$HOME/scratch/jd`); si se pierde esa VM hay que rehacerlos (no se versionan).
+8. **Backlog sin cambios:** rotar/sacar la API key de Twelve Data del repo, FedWatch (después de Economías Globales), GuruFocus vía script aparte en Cifra, filtros de Métricas, bonos globales (Bund/JGB/Gilt/China), etc. (ver Pendientes).
+
+## Sesión 2026-10-22 (Cowork, 6ta) — Fix TDZ #3 + clase de activo + tab Escenarios + tanda 2 (duración, links por ticker) — CERRADA, pusheada 22/10 (`aa81b28..d6c6499`)
 
 Contexto: Pedro aclaró (21-22/10) que, además de forex, planea hacer **swing en índices, bonos y acciones** (anotado en seminarios de análisis técnico de acciones e índices) y quiere cargar **análisis y escenarios** en el dashboard. Revisión de código: el registro de trades era genérico (activo = texto libre) pero la bitácora de análisis guardaba solo `{fecha, texto}`, sin estructura ni forma de medir aciertos, y no había clasificación por clase de activo. Decisiones confirmadas con Pedro antes de tocar código: tab nueva "Escenarios" · campos completos · clase de activo auto-detectada con mapa editable (sin tocar CSV/Excel) · arreglar primero el TDZ.
 
@@ -82,7 +101,7 @@ Decisión pendiente (no implementada): contar los escenarios como "actividad de 
 - **Decidido NO hacer ahora:** ficha con Finnhub y GuruFocus en este dashboard. GuruFocus (Data API, plan Free 100 requests/mes, Data API Agreement sin leer) lo llevó Pedro al chat de **Cifra** (`cifra.html`); **aclarado 22/10 con capturas de Pedro: no hay contradicción.** El chat de Cifra (casi seguro) plantea GuruFocus en Cifra vía un **script aparte** (cruce de cifras SEC + GuruFocus), no como llamada de red en el HTML: Cifra no usa red ni keys y está congelado hasta cerrar SPCX 3Q26; más adelante, una pestaña "Cruce" levantaría el resultado. Esto reemplaza mi idea inicial de Worker + cache dentro de Cifra (rompía esa regla). Nada de GuruFocus en trading-desk. Ver `RESEARCH_ideas_wallstreet.txt` (entrada 22/10).
 - Verificado con jsdom: duración con y sin FECHA CIERRE, filtro de clase, links y validación, 0 errores. **No probado en navegador real.**
 
-*Cerrado: 2026-10-22, sesión Cowork (Claude Sonnet 5.5). Commits locales: `e7f95eb` (TDZ), `e22c6fe` (clase), `0b7d62a` (Escenarios), `b2f4fa4` (CHANGELOG), `159ba94` (tanda 2) y el de este CHANGELOG — Pedro pushea desde su Terminal.*
+*Cerrado: 2026-10-22, sesión Cowork (Claude Sonnet 5.5). Pusheado 22/10. Commits: `e7f95eb` (TDZ), `e22c6fe` (clase), `0b7d62a` (Escenarios), `b2f4fa4` (CHANGELOG), `159ba94` (tanda 2) y el de este CHANGELOG — Pedro pushea desde su Terminal.*
 
 ---
 
@@ -249,13 +268,13 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `b9dbac2` — **pusheado 19/10** (`468169a..b9dbac2`, 5 commits: RGBI/OFZ ruso, fix proxy CORS por defecto + reintento de snapshots incompletos, y sus CHANGELOGs). Falta que Pedro confirme Commodities/Bonos en la URL en vivo con recarga forzada (Cmd+Shift+R).
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `e62f0c9` — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
 - ✅ **Proxy CORS con valor por defecto en el código + reintento de snapshots incompletos (19/10):** Commodities/Bonos/Índices ya no dependen de que el proxy esté cargado en `localStorage`. **Verificado en vivo por Pedro (19/10, capturas):** Commodities 11/11 cards LIVE (incluido acero `HRC=F`) y Bonos 8/8 con datos (7 vía Yahoo + RGBI vía MOEX).
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
-- ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · **Commodities (18/09)** · **Bonos (18/09)** · Earnings · **Histórico (nuevo 08/09)** · **Escenarios (nuevo 22/10)** · ⚙ Config. Filtros globales en Overview: **Cuenta** y **Clase de activo (nuevo 22/10)**.
+- ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · **Commodities (18/09)** · **Bonos (18/09)** · Earnings · **Histórico (nuevo 08/09)** · **Escenarios (nuevo 22/10; 30/10: pegado texto/CSV, actualizaciones por fecha, Editar)** · ⚙ Config. Filtros globales en Overview: **Cuenta** y **Clase de activo (nuevo 22/10)**.
 - ✅ **Escenarios (22/10):** tab con formulario estructurado (activo, clase, temporalidad, sesgo, tesis, entrada, invalidación*, objetivo, link TV, estado), filtros y resumen de acierto sobre cerrados; colección Firestore `escenarios`. Card "Abrir ticker" con links a TradingView/Finviz/SEC/Yahoo. *Sin probar en navegador real ni contra Firestore real.
 - ✅ **Duración de trades (22/10, tab Métricas):** antigüedad de los EN CURSO + duración de cerrados con la columna opcional FECHA CIERRE.
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
@@ -296,7 +315,9 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [ ] **Decidir si la tab Métricas respeta los filtros Cuenta/Clase** (hoy Rachas, Drawdown, TESLA/MALETA, Sesgo por Activo, Prop Firm, Kelly y Calendario usan todos los trades). Con forex y swing de índices/acciones mezclados, las métricas por clase importan. Ojo: Prop Firm probablemente deba seguir usando todo; cambiar Kelly/Drawdown a subconjuntos chicos suma ruido (muestra chica). Es decisión de diseño — preguntar antes.
 - [ ] **Probar en el navegador real tras el push (22/10):** tab Escenarios (guardar uno, recargar, cambiar estado), selector Clase + mapa en Config, card Duración en Métricas, un link de ticker, y que ya no haya caja vacía bajo el banner ni gráficos sin dibujar en la primera carga.
   - **30/10:** Pedro mostró capturas en navegador real: pestaña Escenarios y card Clase de activo en Config presentes. Falta confirmar guardado/recarga de un escenario, la card Duración y los links de ticker.
-- [ ] **Probar en el navegador real (30/10, ronda 3 de Escenarios):** tras push + recarga dura (Cmd+Shift+R): Editar GBPCHF → Creado 02/10/2026; cargar con `Actualizar:` el historial (02/10, 15/10, 29/10, 30/10 con links de TradingView); ver línea de tiempo y chip. Pendiente de Pedro: confirmar stop 1,08390 (había tipeado 1,08930).
+- [ ] **Probar en el navegador real (30/10, ya pusheado `e62f0c9`):** recarga dura (Cmd+Shift+R): Editar GBPCHF → Creado 02/10/2026; pegar `ESCENARIOS_historicos_notion_30-10.txt` (11 listos) + Guardar; filtro estado "todos"; probar "＋ Actualización" y un bloque `Actualizar:`. Lo verificado hasta ahora fue en jsdom/Chromium simulado, NO en el navegador de Pedro.
+- [ ] **Cargar el historial de actualizaciones de GBPCHF (02/10, 15/10, 29/10, 30/10)** con bloques `Actualizar:` (texto + link TradingView por fecha; ver Cierre de la sesión 30/10). Pendiente: confirmar stop 1,08390.
+- [ ] **Criterio de "tasa de acierto analítico" en Escenarios (30/10):** los análisis con SL tocado pero "Cumplió Parcial" en Notion (GOLD 16/03, USD/OIL 27/03) se cargaron `invalidado` → el resumen los cuenta como fallo. Decidir si "Parcial" cuenta como acierto o si hace falta un estado/etiqueta aparte. También 3 dudas de datos: USD/MXN 17/06 (SL vs Cumplió Sí), GBP/CAD 19/03 (¿trade real?), EUR/USD 10/03 (4H vs D1).
 - [ ] **Escenarios como "actividad de gestor"** en el banner de consistencia (hoy cuentan solo trades y bitácora de texto) — decisión pendiente de Pedro.
   - **Recomendación 30/10 (Pedro: "no sé si contaría"):** que cuenten SOLO para la alerta de ausencia (escenario creado o actualizado), no para la racha positiva de semanas. Sin implementar, pendiente de su OK.
 - [x] ~~OFZ ruso (RGBI) vía MOEX ISS~~ — **integrado 19/10** (5ta sesión), ver Estado actual. Verificado en vivo por Pedro (111,69 pts, CERRADO).
