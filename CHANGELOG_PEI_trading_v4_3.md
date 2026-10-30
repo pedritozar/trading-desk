@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-10-30 (sesión Cowork, 8va en curso: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
+**Última actualización:** 2026-10-30 (sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -27,7 +27,7 @@ Si algo no está en este CHANGELOG, probablemente vive en uno de estos lugares. 
 - **Trades de agosto (6 en Notion):** este CHANGELOG tiene el pendiente (ver 🔴 Alta prioridad). **Entrada/SL/TP de esos trades no están escritos en ningún archivo ni en Notion**: solo los tiene Pedro (broker/capturas). No hay nada más que sacar del chat viejo sobre esto.
 - **Notion:** base "📊 Análisis TradingView 2026" (dentro de "📒 Bitácora Trading 2026"): 13 filas con propiedades (fecha, sesgo, resultado, notas) y **páginas de detalle vacías**; ya volcada a `ESCENARIOS_historicos_notion_30-10.txt`. La bitácora de trades de Notion es la otra fuente que hay que mantener al día junto con Excel/CSV.
 - **Raíz del repo (todo lo demás):** `CHANGELOG_PEI_trading_v4_3.md` (fuente de verdad) · `RESEARCH_ideas_wallstreet.txt` (research institucional, append-only) · `ESCENARIOS_historicos_notion_30-10.txt` (bloque pegable de Escenarios; si Pedro ya lo pegó, no repetir: el pegado detecta duplicados) · `tracker_bitacora_traiding__DEFINITIVO.csv/.xlsx` · `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md` (poda, append-only) · `ZAR vanguard/` (otro proyecto —Fondo de Emergencia—: no editar desde acá).
-- **Firestore `peisys`:** colecciones `escenarios` (con `actualizaciones` embebidas), `trades_history`, `earnings_hist`, y el doc `resumen_trading/actual` (puente PEI·SYS). Reglas abiertas (wildcard).
+- **Firestore `peisys`:** colecciones `escenarios` (con `actualizaciones` embebidas), `riesgo_ordenes` (órdenes de la pestaña Riesgo), `riesgo_config` (doc `balances`: balance por cuenta), `trades_history`, `earnings_hist`, y el doc `resumen_trading/actual` (puente PEI·SYS). Reglas abiertas (wildcard).
 - **Fuera del repo:** los tests jsdom/Playwright de las sesiones (`t3`–`t9`) viven en la VM de Cowork (`$HOME/scratch/jd`), no se versionan. Lo que se verificó con ellos NO es lo mismo que verificado en el navegador real de Pedro: el CHANGELOG distingue ambos.
 - **Lo que solo se dijo "de palabra" en el chat del 30/10 y NO afecta al sistema:** Pedro usa Bloomberg TV como panel visual (sin audio) al analizar y escucha música para trabajar; no hay nada que implementar.
 
@@ -63,9 +63,13 @@ El 30/10 una corrección del CHANGELOG falló en silencio (el texto ancla no coi
 - **Regla fija:** después de editar un archivo con un script, volver a leer las líneas cambiadas (o `grep`) y mostrar el resultado real antes de decir "hecho". Un `assert` que falla no cuenta como cambio. Mismo criterio con `git commit` (mirar `git log`/`git status`) y con cualquier push: se confirma con la salida real de Pedro (`d6c6499..e62f0c9`), no con lo que se esperaba.
 - Corolario del mismo día: **nunca pegar texto en el modal "Pegar CSV" de Trades** salvo un CSV de trades (`parseCSV()` pisa `trades` y `pei_csv_backup` con cualquier cosa; guard pendiente abajo).
 
+### 6. `col()` busca por substring: columnas con nombres parecidos se pisan (nueva 30/10)
+`col(t,'riesgo')` devuelve la **primera** columna cuyo encabezado contiene "riesgo". Al sumar "RIESGO REAL%" junto a "RIESGO%", sin cambios el dashboard habría seguido usando el planificado sin avisar. Se resolvió con `riesgoDeTrade(t)` (busca explícito "riesgo real" y cae al planificado).
+- **Regla fija:** antes de agregar una columna nueva al Excel/CSV, buscar con `grep` qué `col(...)` ya matchea por substring con su nombre y ajustar el código a esa columna.
+
 ---
 
-## Sesión 2026-10-30 (Cowork, 8va — chat nuevo dedicado a trading) — EN CURSO, commits locales sin pushear
+## Sesión 2026-10-30 (Cowork, 8va — chat nuevo dedicado a trading) — CERRADA 17:40 ARG, 4 commits locales a pushear por Pedro (`5204ca4`, `b965f61`, `85202b6` + el commit de cierre del CHANGELOG)
 
 Contexto: chat nuevo dedicado a todo lo de trading; el chat viejo no tiene nada más pendiente (confirmado por Pedro; ver MAPA). **Pruebas en el navegador real (capturas de Pedro):** "＋ Actualización" OK (se guarda, chip "Últ. actualización hoy", desplegable con link). **Siguen sin probar:** Editar GBPCHF → Creado 02/10/2026 (en la captura seguía "creado hoy") y el pegado de `ESCENARIOS_historicos_notion_30-10.txt` (los contadores seguían en 0).
 
@@ -99,6 +103,30 @@ Contexto: chat nuevo dedicado a todo lo de trading; el chat viejo no tiene nada 
   - **Para que funcione completo, Pedro agrega al Excel** (a la derecha de Q CUENTA) las columnas **R "RIESGO REAL%"** y **S "UNIDADES"** a la tabla `ResultadosTraiding`, formato porcentaje con 3 decimales en R (`parseRiesgo` toma un número sin % menor a 0,1 como fracción: "0,05" sin % se leería como 5%).
   - **Pruebas pendientes de Pedro (Safari, tras el push):** pestaña Riesgo → elegir CMC Demo, escribir balance (se guarda al salir del campo) → USD/NZD short entrada 1,76659, SL 1,7788 → debe dar 4.774 u. con 0,33%; guardar la orden, recargar la página y ver que sigue ahí; "B→J" y "Q→S" y pegar en el Excel.
 - **Trades de agosto: todavía sin cargar al Excel/CSV.** Falta el hueco del historial, sistema (TESLA/MALETA) y tipo (intraday/scalping/swing) de cada uno, y que Pedro confirme cargar TODOS los trades ejecutados en el broker (recomendación de Claude).
+
+### Cierre de la sesión 8va (30/10 ~17:40 ARG) — estado final y qué sigue
+
+*Estado del repo al cierre: 4 commits locales sin pushear (`5204ca4` sesión/riesgo, `b965f61` petróleo verificado, `85202b6` pestaña Riesgo v1, y el commit de cierre de este CHANGELOG). Árbol limpio, `check_folder.sh` ✅, `index.html` idéntico a la fuente (`cmp`). Locks de git del commit movidos a `.git/stale-*`. Pedro pushea con `cd ~/Desktop/trading-desk` y `git push origin main`.*
+
+**Descubierto / decidido en la sesión (para no volver a averiguarlo):**
+- **La fuente de verdad de un trade es el historial del broker (CMC), no Notion ni el Excel.** El Excel guarda lo *planificado*; el real sale del broker (o de myfxbook). Notion no tiene niveles numéricos. Reconciliación de 8 trades CMC vs Notion en la sección de arriba (fechas de oro y EUR/JPY, NZD/CAD 22/09 mal rotulado, trades no registrados, USD/OIL "EN CURSO" desactualizado).
+- **El historial de CMC llega a ~3 meses; el de MT5 Demo se borró** (Pedro cree que es por vencimiento de la demo al mes: *hipótesis, no verificada*, depende del broker). Hay que bajar/guardar el historial CMC antes de que venza.
+- **Reglas de riesgo de Pedro:** 0,33–0,50% por trade, hasta 1% como excepción; tope 1% diario (puede desglosarse por día/semana). A veces calcula a mano rápido sin calculadora, por eso el riesgo real puede diferir del planificado. Cálculo a mano documentado en Notion: "🧮 Calculadora de tamaño de posición (a mano)" (borrador privado, id `409cc364-eb92-8122-8185-f3305995c7cb`; moverlo bajo la Bitácora).
+- **Redondeo:** la calculadora redondea hacia abajo; la página de Notion redondeó al más cercano (35.183 y 2.471 vs 35.182 y 2.470). Diferencia de una unidad, intencional.
+- **Las imágenes de Notion no se pueden bajar desde la VM** (el proxy responde 403): las capturas hay que pegarlas en el chat.
+- **jsdom funciona en el Mac de Pedro:** `npm i jsdom` en `$HOME/scratch/jd` anduvo. La prueba de la pestaña Riesgo está en `$HOME/scratch/jd/test.js` y los fragmentos de código en `$HOME/scratch/rg/` (fuera del repo, no se versionan).
+- **Petróleo 08/10 verificado con 3 capturas de TradingView:** el objetivo se alcanzó el 06/10 antes del fill; poner el SL en la entrada evitó ≈−1R; la orden pendiente quedó viva ~2 días. Lección de proceso: cancelar la orden pendiente cuando el escenario ya se cumplió. Muestra de 1 trade; hipótesis de diferencia de contrato TVC vs CMC.
+
+**Orden sugerido para el próximo chat (adjuntar este CHANGELOG):**
+1. **Pedro:** (a) `git push origin main` (4 commits); (b) agregar al Excel, a la derecha de Q CUENTA, las columnas **R "RIESGO REAL%"** (formato % con 3 decimales) y **S "UNIDADES"**; (c) probar la pestaña Riesgo en Safari (recarga dura): CMC Demo + balance → USD/NZD short entrada 1,76659, SL 1,7788 → 4.774 u. al 0,33%; guardar, recargar y ver que sigue; copiar "B→J" y "Q→S" y pegar en el Excel. Si algo falla, captura.
+2. **Pedro manda los datos de agosto (bloquea cargar los trades):** capturas del historial CMC 25/08→08/09 y 30/07→20/08 (filtro Type = Trade; ver si hay ícono de exportar); sistema (TESLA/MALETA) y tipo (intraday/scalping/swing) de cada trade; OK para cargar TODOS los trades ejecutados en el broker (incluido el NZD/CAD de 6 segundos y los no registrados); opcional: historial de MT5 Demo y EUR/USD 12/08.
+3. **Claude, con eso:** cargar los trades al Excel + CSV (pegar B–J y Q–S por separado para no pisar las fórmulas de K–N), recalcular el dashboard, y armar el bloque pegable de Escenarios del petróleo (cumplido, Creado 05/10/2026, link `https://www.tradingview.com/x/qumDgzz3/`).
+4. **Pruebas de la 7ma que siguen abiertas:** Editar GBPCHF → Creado `02/10/2026`; pegar `ESCENARIOS_historicos_notion_30-10.txt` ("11 listos") con el filtro en "todos".
+5. **Notion (Pedro, o Claude con permiso):** USD/OIL-WTI "EN CURSO" → BREAKEVEN (fin 08/10); NZD/CAD 22/09 "short order / SIN entrada oficial" → ejecutado en CMC Demo; fila GBPCHF (Cuenta/Estado/Sistema); mover la página de la calculadora.
+6. **Datos de escenarios sin responder:** USD/MXN 17/06 (SL vs "Cumplió Sí"), GBP/CAD 19/03 ¿trade real?, EUR/USD 10/03 4H vs D1, ¿"Parcial" cuenta como acierto?, y las actualizaciones de GBPCHF (02/10, 15/10, 29/10, 30/10: texto + link TradingView).
+7. **Riesgo v2:** presupuesto diario/semanal contra el tope de 1% (decidir si las pendientes cuentan y cómo reparte Pedro el 1%), TC automático para cruces, borrar/editar órdenes, riesgo real de operaciones pasadas desde el broker.
+8. **Higiene y backlog:** igual que el cierre de la 7ma (guard de `parseCSV()`, blindaje contra borrado de historial de Safari, sacar el `--force` de `deploy.sh`, limpiar `.git/stale-*`, key de Twelve Data, FedWatch, bonos globales).
+9. **Aviso permanente:** cargar los trades reales va antes que más herramientas (pedido explícito de Pedro de que se lo recuerde).
 
 ---
 
@@ -319,13 +347,14 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 
 ## Estado actual del dashboard
 
+- ⏳ **Pendiente de push (Pedro):** 4 commits locales sobre `e62f0c9` (`5204ca4`, `b965f61`, `85202b6` + el de cierre del CHANGELOG). La pestaña **Riesgo** (v1) NO está en vivo hasta el push y todavía no se probó en el navegador real.
 - ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `e62f0c9` — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
 - ✅ **Proxy CORS con valor por defecto en el código + reintento de snapshots incompletos (19/10):** Commodities/Bonos/Índices ya no dependen de que el proxy esté cargado en `localStorage`. **Verificado en vivo por Pedro (19/10, capturas):** Commodities 11/11 cards LIVE (incluido acero `HRC=F`) y Bonos 8/8 con datos (7 vía Yahoo + RGBI vía MOEX).
 - ✅ **Banner Triple Witching en Overview (18/09, 4ta sesión):** aviso liviano sin API -- calcula el tercer viernes de marzo/junio/septiembre/diciembre, con aviso fuerte el día mismo y suave 3 días antes.
-- ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · **Commodities (18/09)** · **Bonos (18/09)** · Earnings · **Histórico (nuevo 08/09)** · **Escenarios (nuevo 22/10; 30/10: pegado texto/CSV, actualizaciones por fecha, Editar)** · ⚙ Config. Filtros globales en Overview: **Cuenta** y **Clase de activo (nuevo 22/10)**.
+- ✅ Tabs: Overview · Trades · Métricas · Precios · Mercado · Índices · **Commodities (18/09)** · **Bonos (18/09)** · Earnings · **Histórico (nuevo 08/09)** · **Riesgo (nuevo 30/10, v1 sin probar en navegador real)** · **Escenarios (nuevo 22/10; 30/10: pegado texto/CSV, actualizaciones por fecha, Editar)** · ⚙ Config. Filtros globales en Overview: **Cuenta** y **Clase de activo (nuevo 22/10)**.
 - ✅ **Escenarios (22/10):** tab con formulario estructurado (activo, clase, temporalidad, sesgo, tesis, entrada, invalidación*, objetivo, link TV, estado), filtros y resumen de acierto sobre cerrados; colección Firestore `escenarios`. Card "Abrir ticker" con links a TradingView/Finviz/SEC/Yahoo. *Sin probar en navegador real ni contra Firestore real.
 - ✅ **Duración de trades (22/10, tab Métricas):** antigüedad de los EN CURSO + duración de cerrados con la columna opcional FECHA CIERRE.
 - ✅ Account selector multi-broker (Todas/CMC Demo/MT5 Demo/CMC Live/MT5 Live), persiste en localStorage
@@ -354,8 +383,11 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [x] ~~Pushear commits locales~~ — **pusheados 18/09** (`5cb613c..43d5660`): tab Commodities + `check_folder.sh`/`.gitignore`, CHANGELOG Commodities, tab Bonos US Treasuries, CHANGELOG Bonos, mini-gráficos Commodities/Bonos, CHANGELOG mini-gráficos, CHANGELOG Estado actual, banner Triple Witching y sus CHANGELOGs.
 - [x] ~~Pushear commit local~~ — **pusheado 14/09** (`ecba91e..94c27ac`): fix del badge "ESTÁTICO" engañoso en Índices (HSTECH/CSI300/MOEX ahora distinguen CERRADO de ESTÁTICO real) + label "Fuente:" correcto por índice.
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
+- [ ] **Pushear 4 commits locales (30/10, 8va):** `5204ca4`, `b965f61`, `85202b6` + el de cierre del CHANGELOG. Comandos: `cd ~/Desktop/trading-desk` y `git push origin main`.
+- [ ] **Probar la pestaña Riesgo en Safari + agregar columnas R "RIESGO REAL%" y S "UNIDADES" al Excel** (pasos en el cierre de la sesión 8va).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente). **Pedro lo hace al final del día 19/10 (acordado); antes de eso el banner de ausencia dice "124 días sin actividad (última 17/6)" por esto, no por falta de actividad real.** **Pedro lo hace el 23/10 (pospuesto del 19/10).**
   - **Actualización 30/10:** en Notion hay 6 trades de agosto con resultado (+ gold-usd 5/8, SPY500 13/8, Eur/jpy 28/8→4/9), no 3; Pedro debe confirmar cuáles fueron ejecutados de verdad y sistema/tipo (swing = MALETA). Falta Entrada/SL/TP de cada uno. GBPCHF NO va acá: es escenario (ver sesión 30/10).
+  - **Actualización 30/10 (8va):** el historial de CMC trae 8 trades reconciliados (tabla en la sesión 8va); faltan capturas de CMC 25/08→08/09 y 30/07→20/08, sistema/tipo de cada trade y el OK de Pedro para cargar TODOS los ejecutados. Ya está resuelto que el broker es la fuente de verdad.
 - [ ] **Disciplina:** Excel y Notion tienen que estar al día los dos — si uno se adelanta al otro, el dashboard solo ve hasta donde llegó el Excel.
 
 ### 🟡 Media prioridad
