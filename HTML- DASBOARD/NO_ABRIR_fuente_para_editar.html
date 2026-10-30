@@ -3807,8 +3807,11 @@ function escMapaTemporalidad(txt) {
   return mapaT[escNorm(txt).replace(/ /g, '')] || '';
 }
 
-function escClave(e) {
-  return [normalizarActivo(e.activo), e.temporalidad || '', e.sesgo || '', normalizarActivo(e.entrada)].join('|');
+function escClave(e, conDia) {
+  const base = [normalizarActivo(e.activo), e.temporalidad || '', e.sesgo || '', normalizarActivo(e.entrada)].join('|');
+  if (!conDia) return base;
+  const d = new Date(e.creado);
+  return isNaN(d) ? base : base + '|' + d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
 }
 
 function escNormalizarItem(raw) {
@@ -3860,7 +3863,7 @@ function escNormalizarItem(raw) {
 
   const it = { activo, clase, temporalidad, sesgo, estado, creado, tesis, entrada, invalidacion, objetivo, link,
     avisos: av, errores: er, duplicado: false };
-  it.clave = escClave(it);
+  it.clave = escClave(it, !!it.creado);  // con Creado: explícito, el día cuenta (dos análisis del mismo par en fechas distintas no son duplicado)
   return it;
 }
 
@@ -3927,7 +3930,7 @@ function previsualizarPegadoEscenarios() {
     escPegadoMsg('✕ No encontré escenarios: cada uno empieza con "Activo: ..." o "Actualizar: ..." (o un CSV con encabezado)', false);
     return;
   }
-  const vistos = new Set(escenariosData.map(escClave));
+  const vistos = new Set(); escenariosData.forEach(e => { vistos.add(escClave(e, false)); vistos.add(escClave(e, true)); });
   const ctx = { nuevos: [], vistos: new Map() };
   escPegadoItems = crudos.map(raw => {
     if (raw.actualizar !== undefined) return escResolverActualizacion(escNormalizarUpdate(raw), ctx);

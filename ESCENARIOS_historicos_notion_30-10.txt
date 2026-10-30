@@ -1,0 +1,91 @@
+Activo: BRENT
+Clase: commodity
+Temporalidad: D1
+Sesgo: bajista
+Estado: archivado
+Creado: 20/02/2026
+Invalidación: No registrada
+Tesis: Escenario toma de ganancias D1/4H. Observado 08:30 ARG. Sin resultado documentado — verificar. [Notion: Resultado Indefinido]
+---
+Activo: EUR/USD
+Clase: forex
+Sesgo: bajista
+Estado: archivado
+Creado: 23/02/2026
+Invalidación: No registrada
+Tesis: Análisis hecho el 23/02, resultado mostrado el 24/02 con imagen pero sin texto confirmatorio. Verificar screenshot. [Notion: Resultado Indefinido]
+---
+Activo: Russell 2000
+Clase: indice
+Temporalidad: 4H
+Sesgo: bajista
+Estado: cumplido
+Creado: 01/03/2026
+Invalidación: No registrada
+Tesis: Diagonal contractil descendente + 61.8% Fibo + LT en 4H. Catalizador: resultados NVIDIA. Confirmado 04/03 — se derrumbó con eventos geopolíticos, cumplió diagonales, Fibo y techo dinámico. TP tocado. [Notion: Resultado TP · Cumplió Sí]
+---
+Activo: GOLD/USD
+Clase: commodity
+Sesgo: bajista
+Estado: archivado
+Creado: 01/03/2026
+Invalidación: No registrada
+Tesis: 'En caso de haberla tomado' — análisis presente, no ejecutado. Sin resultado documentado. [Notion: Resultado Indefinido]
+---
+Activo: EUR/USD
+Clase: forex
+Temporalidad: 4H
+Sesgo: bajista
+Estado: cumplido
+Creado: 10/03/2026
+Invalidación: No registrada
+Tesis: Fortalecimiento USD (sesgo en 4H/D1). Confirmado 12/03: tocó TP y rompió para abajo. Múltiples timeframes analizados. [Notion: Resultado TP · Cumplió Sí]
+---
+Activo: GOLD/USD
+Clase: commodity
+Sesgo: bajista
+Estado: invalidado
+Creado: 16/03/2026
+Invalidación: No registrada
+Tesis: Análisis correcto — precio reaccionó exactamente en zona, pero tocó SL antes de TP. EMAs 3/6 sobre 50 como zona clave. Escenario de compra alterno en $4.800 (61.8% doble Fibo). [Notion: Resultado SL · Cumplió Parcial]
+---
+Activo: USD/OIL
+Clase: commodity
+Sesgo: alcista
+Estado: invalidado
+Creado: 27/03/2026
+Invalidación: No registrada
+Tesis: Compra en EMA 50: cruce EMA 50 vs 3/6 + 38.2% Fibo. Análisis correcto, reaccionó en zona. Si tomado hubiera ido a SL. Escenario ambiguo actualizado 31/03. [Notion: Resultado SL · Cumplió Parcial]
+---
+Activo: GBP/CAD
+Clase: forex
+Sesgo: alcista
+Estado: archivado
+Creado: 31/03/2026
+Invalidación: No registrada
+Tesis: Segundo escenario GBP/CAD (31/03): rebote segunda entrada antes de zona, posible gato muerto. Sin resultado claro. OJO: el primer escenario GBP/CAD (19/03 → TP 25/03) puede ser trade REAL — verificar en broker. [Notion: Resultado Indefinido]
+---
+Activo: S&P 500
+Clase: indice
+Temporalidad: 4H
+Sesgo: bajista
+Estado: archivado
+Creado: 18/05/2026
+Invalidación: No registrada
+Tesis: Escenario bélico bajista: diagonal contractil + 38.2% Fibo + LT en 4H. Condicionado a escalada bélica en el Golfo. También tenía escenario alcista en intraday: 78% Fibo + R2 pivot + LT. Sin resultado documentado. [Notion: Resultado Indefinido]
+---
+Activo: USD/MXN
+Clase: forex
+Sesgo: alcista
+Estado: cumplido
+Creado: 02/06/2026
+Invalidación: No registrada
+Tesis: Doble entrada 02/06. Entrada en punto 2, rebote sin romper soporte. Dos entradas abiertas. BE activado para proteger. Actualizado 04/06. [Notion: Resultado Parcial TP · Cumplió Sí]
+---
+Activo: USD/MXN
+Clase: forex
+Sesgo: alcista
+Estado: invalidado
+Creado: 17/06/2026
+Invalidación: No registrada
+Tesis: Diagonal contractil, sumado a que íbamos con el 50% del retroceso de Fibonacci, nivel 4 del retroceso de Fibo. [Notion: Resultado SL · Cumplió Sí — contradictorio, verificar]

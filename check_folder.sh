@@ -26,6 +26,7 @@ ALLOWED_FILES=(
   ".gitignore"
   "CHANGELOG_PEI_trading_v4_3.md"
   "RESEARCH_ideas_wallstreet.txt"
+  "ESCENARIOS_historicos_notion_30-10.txt"
   "cloudflare_worker_proxy.js"
   "deploy.sh"
   "check_folder.sh"
