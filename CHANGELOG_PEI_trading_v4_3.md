@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-10-30 (sesión Cowork, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
+**Última actualización:** 2026-10-30 (sesión Cowork, 8va en curso: reconciliación con historial CMC + reglas de riesgo; antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -62,6 +62,35 @@ Tres bugs reales no tiraron ningún error visible, solo números plausibles pero
 El 30/10 una corrección del CHANGELOG falló en silencio (el texto ancla no coincidía → `AssertionError`, commit vacío) y yo ya había dicho que estaba hecha. Pedro lo habría descubierto tarde.
 - **Regla fija:** después de editar un archivo con un script, volver a leer las líneas cambiadas (o `grep`) y mostrar el resultado real antes de decir "hecho". Un `assert` que falla no cuenta como cambio. Mismo criterio con `git commit` (mirar `git log`/`git status`) y con cualquier push: se confirma con la salida real de Pedro (`d6c6499..e62f0c9`), no con lo que se esperaba.
 - Corolario del mismo día: **nunca pegar texto en el modal "Pegar CSV" de Trades** salvo un CSV de trades (`parseCSV()` pisa `trades` y `pei_csv_backup` con cualquier cosa; guard pendiente abajo).
+
+---
+
+## Sesión 2026-10-30 (Cowork, 8va — chat nuevo dedicado a trading) — EN CURSO, commits locales sin pushear
+
+Contexto: chat nuevo dedicado a todo lo de trading; el chat viejo no tiene nada más pendiente (confirmado por Pedro; ver MAPA). **Pruebas en el navegador real (capturas de Pedro):** "＋ Actualización" OK (se guarda, chip "Últ. actualización hoy", desplegable con link). **Siguen sin probar:** Editar GBPCHF → Creado 02/10/2026 (en la captura seguía "creado hoy") y el pegado de `ESCENARIOS_historicos_notion_30-10.txt` (los contadores seguían en 0).
+
+- **La fuente de verdad de los trades es el historial del broker, no Notion.** La base "Trades 2026" de Notion tiene solo propiedades + capturas: Entrada/SL/TP están dentro de las imágenes (la propia Bitácora dice que lo numérico vive en el Excel). Desde la VM de Cowork no se pueden bajar esas imágenes (el proxy bloquea el host de archivos de Notion, 403): hay que pegar las capturas en el chat o pasar el historial del broker.
+- **Historial CMC Demo (capturas de Pedro 30/10; ventana visible 30/07–30/10, con huecos).** Cada monto se chequeó contra precio × unidades. R/R y R: cálculo de Claude.
+
+| Apertura | Activo | Unid. | Entrada / SL / TP | Salida | Resultado | En Notion |
+|---|---|---|---|---|---|---|
+| 20/08 09:43 | NZD/CAD short | 16.791 | 0,81970 / 0,82047 / 0,81403 | cierre no visible | ? | no está |
+| 20/08 21:31 | EUR/JPY short | 4.106 | 185,857 / 187,970 / 181,970 | cierre no visible | ? | dice 28/8→4/9 GANADA (fecha no coincide) |
+| 25/08 10:11 | AUD/USD short | 800 | 0,71594 / 0,71710 / 0,71180 | SL 0,71710 (22:30) | −0,93 USD · −1R · R/R teórico 3,57 | PERDIDA (coincide) |
+| 08/09 16:13 | Oro (Gold Cash) buy | 1 | 4.372,62 / 4.352,78 / 4.426,26 | SL ejecutado 4.345,60 (17:49) | −27,02 USD · −1,36R (deslizamiento) · R/R teórico 2,70 | fecha 5/8, resultado 09/09 (no coincide) |
+| 22/09 02:50 | NZD/CAD short | 802 | 0,80502 / 0,80633 / 0,80025 | SL 0,80633 (05:52) | −0,75 USD · −1R · R/R teórico 3,64 | "short order / SIN entrada oficial" pero SÍ se ejecutó |
+| 08/10 03:59 | Petróleo WTI Dic-26 short | 9 | 90,010 / 90,011* / 87,000 | stop 90,043 (mismo segundo) | −0,30 USD (≈ breakeven) | EN CURSO (nunca se cerró) |
+| 13/10 08:38 | NZD/CAD short (a mercado) | 16.800 | 0,79973 / sin SL | cerrado 6 s después a 0,79998 | −2,96 USD | no está |
+| 30/10 16:14 | USD/NZD buy limit | 500 | 1,76659 / 1,75438 / 1,79460 | PENDIENTE (sin ejecutar) | — (R/R 2,29) | no está |
+
+  *Petróleo: SL original 90,530 (TP 86,830); el 06/10 08:18 Pedro movió el SL a 90,011 (= entrada) ANTES de que la orden se ejecutara, por eso se activó y se cerró en el mismo segundo. Con el SL original el riesgo era ≈ 4,68 USD → ≈ −0,06R. Pedro recuerda que después el precio llegó a la zona 86–87 (escenario cumplido **según Pedro, no verificado por Claude**): el escenario va a Escenarios como cumplido; el trade del broker queda BREAKEVEN. Notion: pasar de EN CURSO a BREAKEVEN (pendiente, lo hace Pedro o se le pide permiso).
+- **Huecos del historial CMC:** falta el tramo 25/08→08/09 (cierres de NZD/CAD y EUR/JPY abiertos el 20/08) y 30/07→20/08 (GBP-AUD 11/8, SPY500 13/8, oro "5/8" de Notion). CMC solo muestra ~3 meses: capturar/exportar antes de fines de noviembre. No se confirmó si hay exportación a CSV. Cuenta CMC al 30/10: Account Value = Cash = 10.166,93 USD, margen 0, sin posiciones abiertas.
+- **MT5 Demo (EUR/USD 12/08 y anteriores):** se borró. La doc de MetaTrader dice que una demo vencida se borra del Navigator y su historial deja de verse; el plazo lo fija cada broker (p. ej. Pepperstone: 60 días). Falta saber con qué broker es la MT5 Demo de Pedro. Del EUR/USD solo quedan las capturas de Notion. Hábito sugerido: exportar el historial cada mes antes del vencimiento.
+- **RIESGO%: el del Excel es el PLANIFICADO, no el real.** Pedro saca el real de las calculadoras de myfxbook; a veces, si el precio ya está cerca del punto de entrada, pone la orden sin calculadora y calcula a mano rápido. Reglas de riesgo de Pedro: 0,33–0,50% por trade, hasta 1% de la cuenta; **tope 1% diario**; puede desglosar ese presupuesto por día/semana (pendiente que lo defina).
+- **Riesgo real en CMC (sobre 10.000 USD; unidades × distancia al SL):** AUD/USD 25/08 ≈ 0,009% · NZD/CAD 22/09 ≈ 0,008% · petróleo ≈ 0,05% (con SL original) · NZD/CAD 20/08 ≈ 0,09% (estimado, CAD→USD ≈ 0,72) · oro ≈ 0,20% · EUR/JPY 20/08 ≈ 0,55% (estimado). Solo oro y EUR/JPY se acercan al rango planificado.
+- **Consecuencia en el dashboard:** el Resumen Mensual/Anual calcula el % de cuenta como P&L(R) × RIESGO% de cada trade (`parseRiesgo`), o sea que con RIESGO% planificado sobreestima el % real. Las R no cambian (se calculan por distancia de precio).
+- **Hallazgo menor en el Excel:** la hoja 🚀 TESLA quedó con la ficha del USD/MXN 02/06 con SL/TP sin punto decimal (`1727664`, `1733222` en vez de 17,27664 / 17,33222) y entrada 17.129 (la bitácora dice 17,29025). No se verificó si alimenta algo.
+- **Trades de agosto: todavía sin cargar al Excel/CSV.** Falta el hueco del historial, sistema (TESLA/MALETA) y tipo (intraday/scalping/swing) de cada uno, y que Pedro confirme cargar TODOS los trades ejecutados en el broker (recomendación de Claude).
 
 ---
 
@@ -324,6 +353,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ### 🟡 Media prioridad
 - [x] ~~Tanda 2 del plan de swing~~ — **hecha 22/10 (`159ba94`)**: duración de trades + links por ticker. Lo que queda abierto de esa línea: (a) **Pedro agrega FECHA CIERRE al Excel** si quiere duración de cerrados; (b) ficha de acción con fundamentales (Finnhub o GuruFocus) — GuruFocus queda en Cifra vía script aparte (ver línea 64); no se hace en este dashboard; si algo entra acá, Worker propio con token como secreto, nunca en el HTML (repo público).
 - [ ] **Card FedWatch / FOMC (probabilidades de tasa de la Fed) en este dashboard — pendiente explícito de Pedro, NO empezar todavía:** primero se arma en Economías Globales (Tanda 8: réplica del método público de CME sobre futuros ZQ vía Yahoo, calendario FOMC hardcodeado) y ese chat deja un instructivo para este. Esperar a que esté corrida y probada en navegador real, que Pedro pegue el instructivo y adaptarla. Ventaja acá: el Worker de Cloudflare ya acepta hosts de Yahoo; sin verificar aún si Yahoo expone cada contrato mensual ZQ.
+- [ ] **Registro/calculadora de riesgo en el dashboard (idea de Pedro 30/10; extiende "Calculadora de lotaje" del backlog) — sin código hasta el OK de Pedro.** Propuesta: (1) calculadora (balance, riesgo %, entrada, SL, instrumento → unidades); (2) columnas RIESGO% REAL y UNIDADES en CSV/Excel, calculadas desde el historial del broker (unidades × distancia al SL) para no perder datos; (3) presupuesto de riesgo diario/semanal contra el tope de 1% diario. Decisiones abiertas: dónde se guarda (CSV vs Firestore), si el tope cuenta órdenes pendientes o solo ejecutadas, cómo desglosa Pedro el 1% por día/semana, cómo se convierten unidades de CMC a lotes/pips de otros brokers, y de dónde salen los tipos de cambio (el dashboard ya tiene proxy Yahoo/Twelve Data).
 - [ ] **Proteger `parseCSV()` de texto que no es un CSV de trades (30/10)** — hoy cualquier texto pegado en "Pegar CSV" reemplaza `trades` y el backup. Propuesta: exigir encabezado con FECHA y ACTIVO; si no, mostrar error y no tocar nada. Esperando OK de Pedro.
 - [ ] **Blindaje contra borrado de historial de Safari (30/10) — diseño propuesto, esperando OK de Pedro** (ver sesión 30/10): auto-respaldo a Firestore de CSV + ajustes + historial Commodities/Bonos (sin API keys), restauración automática, exportar/importar JSON, aviso cuando no hay datos. Tip inmediato sin código: Mac → mantener Option y elegir "Clear History and Keep Website Data" (a verificar).
 - [ ] **Decidir si la tab Métricas respeta los filtros Cuenta/Clase** (hoy Rachas, Drawdown, TESLA/MALETA, Sesgo por Activo, Prop Firm, Kelly y Calendario usan todos los trades). Con forex y swing de índices/acciones mezclados, las métricas por clase importan. Ojo: Prop Firm probablemente deba seguir usando todo; cambiar Kelly/Drawdown a subconjuntos chicos suma ruido (muestra chica). Es decisión de diseño — preguntar antes.
@@ -450,6 +480,7 @@ git push origin main
 - **Objetivo:** trader/analista institucional nivel NY — CMT + CFA + track record auditado. A futuro: hedge fund / consultora / fondo especulativo chico.
 - **Certificaciones:** CMT Level I (post prop firm challenge) · CFA (futuro)
 - **Prop firm:** 100k account — pendiente
+- **Reglas de riesgo (dichas por Pedro 30/10):** 0,33–0,50% por trade, hasta 1% de la cuenta; tope 1% diario (desglosable por día/semana). A veces calcula el tamaño a mano, rápido, sin calculadora. El RIESGO% del Excel es el planificado; el real sale de las calculadoras de myfxbook o del historial del broker.
 - **Brokers:** CMC Demo · MT5 Demo · Alfy CC57857 (cartera real)
 - **Setup:** MacBook Air + monitor ultrawide LG · TradingView, Excel/Numbers, Notion, GitHub Pages
 - **Nota:** Bloomberg digital NO es Terminal — sin BLPAPI ni feed de datos, no sirve para conectar APIs. Sí como lectura para el CMT.
