@@ -19,6 +19,20 @@
 
 ---
 
+## 🗺️ MAPA — dónde vive cada cosa (para chats nuevos; agregado 30/10)
+
+Si algo no está en este CHANGELOG, probablemente vive en uno de estos lugares. **Antes de preguntarle a Pedro o al chat viejo, mirar acá.**
+
+- **CMT / prop firm:** el detalle NO está en este archivo. `traiding:cmt/CHANGELOG_cmt_tutor.md` (v0.1, 12/08/2026): el **tutor CMT está sin iniciar, "en espera"** hasta que Pedro decida retomarlo en un chat dedicado; ahí están el diagnóstico de materiales y la estructura oficial del examen. Materiales en esa carpeta: `CMT PROGRAM GUIDE 2026.pdf`, Standards of Practice Handbook, `CMT_Level1_Glosario.xlsx` (también está en el Project de claude.ai), capturas del 11/08. La carpeta está en `.gitignore` (no se versiona ni se pushea). De la **prop firm de 100k** solo existe la línea "pendiente" en *Contexto del trader*: no hay estado del challenge ni plan en ningún archivo.
+- **Trades de agosto (6 en Notion):** este CHANGELOG tiene el pendiente (ver 🔴 Alta prioridad). **Entrada/SL/TP de esos trades no están escritos en ningún archivo ni en Notion**: solo los tiene Pedro (broker/capturas). No hay nada más que sacar del chat viejo sobre esto.
+- **Notion:** base "📊 Análisis TradingView 2026" (dentro de "📒 Bitácora Trading 2026"): 13 filas con propiedades (fecha, sesgo, resultado, notas) y **páginas de detalle vacías**; ya volcada a `ESCENARIOS_historicos_notion_30-10.txt`. La bitácora de trades de Notion es la otra fuente que hay que mantener al día junto con Excel/CSV.
+- **Raíz del repo (todo lo demás):** `CHANGELOG_PEI_trading_v4_3.md` (fuente de verdad) · `RESEARCH_ideas_wallstreet.txt` (research institucional, append-only) · `ESCENARIOS_historicos_notion_30-10.txt` (bloque pegable de Escenarios; si Pedro ya lo pegó, no repetir: el pegado detecta duplicados) · `tracker_bitacora_traiding__DEFINITIVO.csv/.xlsx` · `historicos txt/CHANGELOG_PEI_trading_ARCHIVO_HISTORICO.md` (poda, append-only) · `ZAR vanguard/` (otro proyecto —Fondo de Emergencia—: no editar desde acá).
+- **Firestore `peisys`:** colecciones `escenarios` (con `actualizaciones` embebidas), `trades_history`, `earnings_hist`, y el doc `resumen_trading/actual` (puente PEI·SYS). Reglas abiertas (wildcard).
+- **Fuera del repo:** los tests jsdom/Playwright de las sesiones (`t3`–`t9`) viven en la VM de Cowork (`$HOME/scratch/jd`), no se versionan. Lo que se verificó con ellos NO es lo mismo que verificado en el navegador real de Pedro: el CHANGELOG distingue ambos.
+- **Lo que solo se dijo "de palabra" en el chat del 30/10 y NO afecta al sistema:** Pedro usa Bloomberg TV como panel visual (sin audio) al analizar y escucha música para trabajar; no hay nada que implementar.
+
+---
+
 ## ⚠️ LECCIONES — errores que no hay que repetir
 
 Esta sección es la excepción a la poda. Se actualiza, nunca se borra: es justo la parte que evita cometer el mismo error dos (o tres) veces.
