@@ -1458,11 +1458,11 @@ body {
         <span style="font-size:9px;color:var(--text-muted);font-family:'DM Mono',monospace">texto "Campo: valor" o CSV · vista previa antes de guardar</span>
       </div>
       <div style="padding:8px 0;max-width:none">
-        <textarea id="esc-paste-texto" class="config-input" rows="8" placeholder="Pegá acá uno o varios escenarios (separados por una línea con ---) o un CSV con encabezado. Tocá «Insertar plantilla» para ver el formato."></textarea>
+        <textarea id="esc-paste-texto" class="config-input" rows="8" oninput="programarAnalisisEscenarios()" placeholder="Pegá acá uno o varios escenarios (separados por una línea con ---) o un CSV con encabezado. Se analiza solo al pegar. Tocá «Insertar plantilla» para ver el formato."></textarea>
       </div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center">
         <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="previsualizarPegadoEscenarios()">Analizar</button>
-        <button id="esc-paste-guardar" class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="guardarPegadoEscenarios()" disabled>Guardar</button>
+        <button id="esc-paste-guardar" class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px;opacity:.5" onclick="guardarPegadoEscenarios()">Guardar</button>
         <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="insertarPlantillaEscenario()">Insertar plantilla</button>
         <button class="nav-btn" style="border:1px solid var(--border);border-radius:4px;padding:7px 14px" onclick="limpiarPegadoEscenarios()">Limpiar</button>
         <span id="esc-paste-status" style="font-size:11px"></span>
@@ -2131,6 +2131,8 @@ let escenariosData = [];
 let escenariosFiltro = { clase: 'todas', estado: 'vigente', texto: '' };
 let escPegadoItems = [];       // vista previa del pegado de escenarios
 let escPegadoGuardando = false;
+let escPegadoTexto = '';       // texto que se analizó por última vez
+let escPegadoTimer = null;
 let cuentaActiva = 'todas'; // filtro global de cuenta — 'todas' | 'cmc demo' | 'mt5 demo' | 'cmc live' | 'mt5 live'
 
 document.getElementById('csv-input').addEventListener('change', function(e) {
@@ -3862,6 +3864,7 @@ function escPegadoMsg(t, ok) {
 function previsualizarPegadoEscenarios() {
   const texto = (document.getElementById('esc-paste-texto')?.value || '').trim();
   if (!texto) { escPegadoMsg('✕ Pegá primero el texto', false); return; }
+  escPegadoTexto = texto;
   const crudos = parsearCSVEscenarios(texto) || parsearBloquesEscenarios(texto);
   if (!crudos.length) {
     escPegadoItems = []; renderPegadoEscenarios();
@@ -3885,7 +3888,7 @@ function renderPegadoEscenarios() {
   const cont = document.getElementById('esc-paste-preview');
   const btn = document.getElementById('esc-paste-guardar');
   const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado).length;
-  if (btn) { btn.disabled = listos === 0; btn.textContent = listos ? `Guardar ${listos}` : 'Guardar'; }
+  if (btn) { btn.dataset.listo = listos ? '1' : '0'; btn.style.opacity = listos ? '1' : '.5'; btn.textContent = listos ? `Guardar ${listos}` : 'Guardar'; }
   if (!cont) return;
   if (!escPegadoItems.length) { cont.innerHTML = ''; return; }
   const td = 'style="padding:4px 8px;border-bottom:1px solid var(--border);vertical-align:top"';
@@ -3909,12 +3912,20 @@ function renderPegadoEscenarios() {
 
 async function guardarPegadoEscenarios() {
   if (escPegadoGuardando) return;
+  const textoActual = (document.getElementById('esc-paste-texto')?.value || '').trim();
+  if (!textoActual) { escPegadoMsg('✕ Pegá primero el texto del escenario', false); return; }
+  if (textoActual !== escPegadoTexto) {
+    previsualizarPegadoEscenarios();
+    const st0 = document.getElementById('esc-paste-status');
+    if (st0) st0.textContent += ' · revisá la vista previa y tocá Guardar de nuevo';
+    return;
+  }
   const listos = escPegadoItems.filter(i => !i.errores.length && !i.duplicado);
   if (!listos.length) { escPegadoMsg('✕ No hay escenarios listos para guardar', false); return; }
   if (typeof window.peisysSetDoc !== 'function') { escPegadoMsg('✕ Puente PEI·SYS no disponible', false); return; }
   escPegadoGuardando = true;
   const btn = document.getElementById('esc-paste-guardar');
-  if (btn) btn.disabled = true;
+  if (btn) btn.style.opacity = '.5';
   const base = Date.now();
   let ok = 0, fallo = 0;
   for (let i = 0; i < listos.length; i++) {
@@ -3947,10 +3958,18 @@ async function guardarPegadoEscenarios() {
   }
 }
 
+function programarAnalisisEscenarios() {
+  clearTimeout(escPegadoTimer);
+  const ta = document.getElementById('esc-paste-texto');
+  if (!ta || !ta.value.trim()) { escPegadoItems = []; escPegadoTexto = ''; renderPegadoEscenarios(); escPegadoMsg('', true); return; }
+  escPegadoTimer = setTimeout(previsualizarPegadoEscenarios, 350);
+}
+
 function limpiarPegadoEscenarios() {
   const ta = document.getElementById('esc-paste-texto');
   if (ta) ta.value = '';
   escPegadoItems = [];
+  escPegadoTexto = '';
   renderPegadoEscenarios();
   escPegadoMsg('', true);
 }
@@ -3960,7 +3979,9 @@ function insertarPlantillaEscenario() {
   if (!ta) return;
   const hoy = new Date().toLocaleDateString('es-AR');
   ta.value = `Activo: EUR/USD\nTemporalidad: 4H\nSesgo: Alcista\nEstado: Vigente\nCreado: ${hoy}\nEntrada: 1,0850 (zona 1,0840-1,0860)\nInvalidación: 1,0790\nObjetivo: 1,0950\nLink: https://www.tradingview.com/x/...\nTesis: Estructura, patrón y contexto, en una o varias líneas.\n---\nActivo: SPX\nTemporalidad: D1\nSesgo: Alcista\nInvalidación: Cierre diario bajo 5780\nTesis: Segundo escenario de ejemplo.`;
-  escPegadoMsg('Plantilla insertada: reemplazá los datos y tocá Analizar', true);
+  previsualizarPegadoEscenarios();
+  const st1 = document.getElementById('esc-paste-status');
+  if (st1) st1.textContent = 'Plantilla insertada: reemplazá los datos de ejemplo · ' + st1.textContent;
 }
 
 function renderEscenarios() {
