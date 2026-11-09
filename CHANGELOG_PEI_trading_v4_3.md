@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-11-09 (sesión Cowork, 9na en curso: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
+**Última actualización:** 2026-11-09 (sesión Cowork, 9na cerrada y pusheada `69ba926..f80728a`: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -73,7 +73,7 @@ El 30/10 una corrección del CHANGELOG falló en silencio (el texto ancla no coi
 
 ---
 
-## Sesión 2026-11-09 (Cowork, 9na — control de carpeta/git + revisión de bugs) — EN CURSO, 2 commits locales sin pushear
+## Sesión 2026-11-09 (Cowork, 9na — control de carpeta/git + revisión de bugs) — CERRADA 9/11 ~19:35 ARG, pusheada por Pedro (`69ba926..f80728a`, 2 commits)
 
 Pedido de Pedro: revisar que todo esté bien, buscar actualizaciones para los HTML, controlar que no se guardaron cosas de más y buscar/solucionar bugs.
 - **Control de carpeta y git (verificado):** árbol limpio; 0 commits adelante y 0 atrás de `origin/main` (el push del 30/10 `cf16a20..69ba926` llegó); `index.html` idéntico a la fuente (`cmp`); `check_folder.sh` ✅. Solo 10 archivos versionados (856 KB): `index.html`, la fuente, CHANGELOG, `ESCENARIOS_historicos_notion_30-10.txt`, `RESEARCH_ideas_wallstreet.txt`, `cloudflare_worker_proxy.js`, `deploy.sh`, `check_folder.sh`, `.gitignore`, `historicos txt/`. Los PDFs del CMT (`traiding:cmt/`, 27 MB) y `ZAR vanguard/` viven dentro de la carpeta pero están **ignorados por git** (no se publican). Nada modificado en los últimos 10 días antes de hoy. Restos inofensivos en `.git`: 40 `stale-*` y 76 `tmp_obj_*`.
@@ -127,6 +127,17 @@ Contexto: chat nuevo dedicado a todo lo de trading; el chat viejo no tiene nada 
   - **Para que funcione completo, Pedro agrega al Excel** (a la derecha de Q CUENTA) las columnas **R "RIESGO REAL%"** y **S "UNIDADES"** a la tabla `ResultadosTraiding`, formato porcentaje con 3 decimales en R (`parseRiesgo` toma un número sin % menor a 0,1 como fracción: "0,05" sin % se leería como 5%).
   - **Pruebas pendientes de Pedro (Safari, tras el push):** pestaña Riesgo → elegir CMC Demo, escribir balance (se guarda al salir del campo) → USD/NZD short entrada 1,76659, SL 1,7788 → debe dar 4.774 u. con 0,33%; guardar la orden, recargar la página y ver que sigue ahí; "B→J" y "Q→S" y pegar en el Excel.
 - **Trades de agosto: todavía sin cargar al Excel/CSV.** Falta el hueco del historial, sistema (TESLA/MALETA) y tipo (intraday/scalping/swing) de cada uno, y que Pedro confirme cargar TODOS los trades ejecutados en el broker (recomendación de Claude).
+
+### Cierre de la sesión 9na (9/11 ~19:35 ARG) — estado final y qué sigue
+
+*Repo al cierre: pusheado hasta `f80728a`; el commit que actualiza este CHANGELOG puede quedar 1 adelante (solo texto) y viaja en el próximo push. `index.html` == fuente, `check_folder.sh` ✅. Todo lo de esta sesión se verificó en simulación (jsdom, Chromium de la nube, Worker con Yahoo falso), **nada en Safari ni contra las fuentes reales**.*
+
+**Orden sugerido para el próximo chat (adjuntar este CHANGELOG):**
+1. **Pedro, ya en vivo (recarga dura Cmd+Shift+R):** probar en Safari lo de "Pedro, en Safari tras el push" (Pendientes 🟡) y **re-deployar el Worker v2** en Cloudflare. Probar también la pestaña Riesgo (caso USD/NZD = 4.774 u.) y agregar al Excel las columnas R "RIESGO REAL%" y S "UNIDADES".
+2. **Decisión de Pedro:** claves de API de Finnhub y Twelve Data en el HTML público → ¿rotarlas y pasarlas a ⚙ Config? (no se tocó).
+3. **Datos de agosto (bloquea cargar trades):** capturas del historial CMC 25/08→08/09 y 30/07→20/08, sistema/tipo de cada trade y OK para cargar TODOS los ejecutados. Ver cierre de la 8va, puntos 2 a 6, que siguen vigentes.
+4. **Opcionales sin OK:** guard de `parseCSV()`, detección del formato de fecha del CSV completo (D/M vs M/D), Chart.js 4.6.1 / Firebase 13.x cuando tengan más de un mes, `integrity` (SRI) en los CDN.
+5. **Aviso permanente:** cargar los trades reales va antes que más herramientas (pedido de Pedro).
 
 ### Cierre de la sesión 8va (30/10 ~17:40 ARG) — estado final y qué sigue
 
@@ -372,9 +383,9 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Estado actual del dashboard
 
 - ✅ **Pusheado 30/10 (`cf16a20..69ba926`, 4 commits):** pestaña **Riesgo** v1 y CHANGELOG de la 8va. La pestaña Riesgo está en vivo pero **todavía no se probó en el navegador real de Pedro** (solo en jsdom).
-- ⏳ **Pendiente de push (Pedro), sesión 9na (9/11):** 2 commits locales: `parseFechaFlex` (fechas D/M) + CHANGELOG, y librerías/tipo de cambio/Worker v2/`catch` de `restoreCSV`. Hasta el push, lo en vivo es `69ba926`. **Después del push hay que probar en Safari** (ver Pendientes) **y re-deployar el Worker v2.**
-- 📦 **Librerías (9/11, commit local sin pushear):** Chart.js 4.5.1 (antes 4.4.4) y Firebase 12.19.0 (antes 10.8.0). Tipo de cambio: `open.er-api.com/v6` con caché de 1 hora.
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `69ba926` (después de la 8va; antes `e62f0c9`) — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
+- ✅ **Pusheado 9/11 (`69ba926..f80728a`, 2 commits):** `parseFechaFlex` (fechas D/M), `catch` de `restoreCSV`, Chart.js 4.5.1, Firebase 12.19.0, tipo de cambio con caché y Worker v2 (el archivo; **el Worker en Cloudflare sigue siendo el viejo hasta que Pedro lo re-deploye**). Todavía **no probado en Safari**.
+- 📦 **Librerías (9/11, en vivo tras el push):** Chart.js 4.5.1 (antes 4.4.4) y Firebase 12.19.0 (antes 10.8.0). Tipo de cambio: `open.er-api.com/v6` con caché de 1 hora.
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `f80728a` (9/11; el CHANGELOG puede ir 1 commit adelante) — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
@@ -411,7 +422,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [x] ~~Firestore Rules de `peisys`~~ — **verificado 14/09, no hacía falta ningún cambio.** Las reglas son un wildcard abierto (`match /{document=**} { allow read, write: if true; }`) que ya cubre cualquier colección, incluida `bitacora_analisis`. ⚠️ **Firebase marca esto como inseguro** ("reglas públicas, cualquiera puede robar/modificar/borrar tu base") — el dashboard no usa auth, así que cualquiera con el `projectId` (`peisys`) podría en teoría escribir en la base. No bloqueante hoy (nada crítico/financiero real ahí, son métricas derivadas), pero queda anotado como riesgo a monitorear/blindar a futuro (reglas por colección o App Check).
 - [x] ~~Pushear 4 commits locales (30/10, 8va)~~ — **pusheados 30/10 (`cf16a20..69ba926`)**.
 - [ ] **Re-deployar el Worker v2 en Cloudflare (Pedro, 3 min; 9/11):** pegar `cloudflare_worker_proxy.js` en Workers & Pages → pei-cors-proxy → Edit code → Deploy. Sin esto el proxy sigue siendo el viejo (funciona, pero sin caché de borde ni reintento).
-- [ ] **Pushear los 2 commits de la sesión 9na (9/11):** comandos `cd ~/Desktop/trading-desk` y `git push origin main`.
+- [x] ~~Pushear los 2 commits de la sesión 9na~~ — **pusheados 9/11 (`69ba926..f80728a`)**.
 - [ ] **Probar la pestaña Riesgo en Safari + agregar columnas R "RIESGO REAL%" y S "UNIDADES" al Excel** (pasos en el cierre de la sesión 8va).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente). **Pedro lo hace al final del día 19/10 (acordado); antes de eso el banner de ausencia dice "124 días sin actividad (última 17/6)" por esto, no por falta de actividad real.** **Pedro lo hace el 23/10 (pospuesto del 19/10).**
   - **Actualización 30/10:** en Notion hay 6 trades de agosto con resultado (+ gold-usd 5/8, SPY500 13/8, Eur/jpy 28/8→4/9), no 3; Pedro debe confirmar cuáles fueron ejecutados de verdad y sistema/tipo (swing = MALETA). Falta Entrada/SL/TP de cada uno. GBPCHF NO va acá: es escenario (ver sesión 30/10).
