@@ -2300,6 +2300,20 @@ function parseCSV(text) {
 // ══════════════════════════════════════
 // RENDER
 // ══════════════════════════════════════
+// Lee la FECHA de un trade. Igual que `new Date(x)` para todo lo que ya se leía bien (M/D/AAAA, ISO);
+// además acepta D/M/AAAA cuando el primer número es > 12 (ej. 30/10/2026), que `new Date` rechaza
+// y hacía desaparecer el trade de los resúmenes sin avisar. Si ambos números son <= 12 es ambigua y
+// se mantiene M/D/AAAA (así exporta hoy el Excel). Devuelve un Date (inválido si no se entiende).
+function parseFechaFlex(v) {
+  const s = String(v == null ? '' : v).trim();
+  const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s);
+  if (m && +m[1] > 12 && +m[2] >= 1 && +m[2] <= 12) {
+    const d = new Date(+m[3], +m[2] - 1, +m[1]);
+    return d.getMonth() === +m[2] - 1 ? d : new Date(NaN);
+  }
+  return new Date(s);
+}
+
 function col(trade, ...names) {
   for (const n of names) {
     const keys = Object.keys(trade);
@@ -2643,7 +2657,7 @@ function renderMetaCuenta() {
   // Curva real: P&L acumulado (R) de los trades cerrados desde fechaInicio, ordenados por fecha
   const data = getTradesFiltrados();
   const cerrados = data
-    .map(t => ({ fecha: new Date(col(t,'fecha')), pnl: parseNumAR(col(t,'p&l','pnl')) || 0, res: String(col(t,'resultado')||'').toUpperCase() }))
+    .map(t => ({ fecha: parseFechaFlex(col(t,'fecha')), pnl: parseNumAR(col(t,'p&l','pnl')) || 0, res: String(col(t,'resultado')||'').toUpperCase() }))
     .filter(t => !isNaN(t.fecha.getTime()) && t.fecha >= inicio && (t.res === 'GANADA' || t.res === 'PERDIDA' || t.res === 'BREAKEVEN'))
     .sort((a,b) => a.fecha - b.fecha);
 
@@ -2865,7 +2879,7 @@ function renderCalendar() {
   trades.forEach(t => {
     const fecha = col(t,'fecha');
     if (!fecha) return;
-    const d = new Date(fecha);
+    const d = parseFechaFlex(fecha);
     if (d.getFullYear() === year && d.getMonth() === month) {
       const day = d.getDate();
       dayMap[day] = (dayMap[day] || 0) + (parseNumAR(col(t,'p&l','pnl')) || 0);
@@ -2922,7 +2936,7 @@ function agruparPorMes(data, anio) {
   data.forEach(t => {
     const fechaRaw = col(t, 'fecha');
     if (!fechaRaw) return;
-    const d = new Date(fechaRaw);
+    const d = parseFechaFlex(fechaRaw);
     if (isNaN(d.getTime()) || d.getFullYear() !== anio) return;
 
     const res = String(col(t, 'resultado') || '').toUpperCase();
@@ -2947,7 +2961,7 @@ function aniosDisponibles() {
   trades.forEach(t => {
     const f = col(t, 'fecha');
     if (!f) return;
-    const d = new Date(f);
+    const d = parseFechaFlex(f);
     if (!isNaN(d.getTime())) set.add(d.getFullYear());
   });
   if (!set.size) set.add(new Date().getFullYear());
@@ -3490,7 +3504,7 @@ function calcSistema(tradeArr) {
 // ══════════════════════════════════════
 function filtrarPorRangoFecha(tradeArr, desde) {
   return tradeArr.filter(t => {
-    const f = new Date(col(t,'fecha'));
+    const f = parseFechaFlex(col(t,'fecha'));
     return !isNaN(f) && f >= desde;
   });
 }
@@ -3610,7 +3624,7 @@ function renderBitacoraAnalisis() {
 function parseFechaTrade(v) {
   const s = String(v || '').trim();
   if (!s) return null;
-  const d = new Date(s);
+  const d = parseFechaFlex(s);
   return isNaN(d) ? null : d;
 }
 
@@ -4704,7 +4718,7 @@ function renderEscenarios() {
 // Última fecha con actividad (trade cargado o entrada de bitácora), o null si no hay nada.
 function calcularUltimaActividadGestor() {
   const fechas = [];
-  trades.forEach(t => { const f = new Date(col(t, 'fecha')); if (!isNaN(f)) fechas.push(f); });
+  trades.forEach(t => { const f = parseFechaFlex(col(t, 'fecha')); if (!isNaN(f)) fechas.push(f); });
   bitacoraAnalisisData.forEach(e => { const f = new Date(e.fecha); if (!isNaN(f)) fechas.push(f); });
   if (!fechas.length) return null;
   return new Date(Math.max(...fechas.map(f => f.getTime())));
@@ -4723,7 +4737,7 @@ function inicioDeSemana(fecha) {
 // Semanas consecutivas (contando la actual hacia atrás) con al menos 1 actividad.
 function calcularRachaSemanasGestor() {
   const semanasConActividad = new Set();
-  trades.forEach(t => { const f = new Date(col(t, 'fecha')); if (!isNaN(f)) semanasConActividad.add(inicioDeSemana(f)); });
+  trades.forEach(t => { const f = parseFechaFlex(col(t, 'fecha')); if (!isNaN(f)) semanasConActividad.add(inicioDeSemana(f)); });
   bitacoraAnalisisData.forEach(e => { const f = new Date(e.fecha); if (!isNaN(f)) semanasConActividad.add(inicioDeSemana(f)); });
 
   let racha = 0;
@@ -4910,7 +4924,7 @@ async function archivarMesesCerrados(forzar) {
 
     const porMes = {};
     trades.forEach(t => {
-      const f = new Date(col(t, 'fecha'));
+      const f = parseFechaFlex(col(t, 'fecha'));
       if (isNaN(f.getTime())) return;
       const key = f.getFullYear() + '-' + String(f.getMonth() + 1).padStart(2, '0');
       (porMes[key] = porMes[key] || []).push(t);
@@ -5062,7 +5076,7 @@ function construirSerieMensualR() {
   const yaArchivado = serie.some(m => m.anio === anioActual && m.mes === mesActual);
   if (!yaArchivado && trades.length) {
     const tradesDelMes = trades.filter(t => {
-      const f = new Date(col(t, 'fecha'));
+      const f = parseFechaFlex(col(t, 'fecha'));
       return !isNaN(f) && f.getFullYear() === anioActual && (f.getMonth() + 1) === mesActual;
     });
     if (tradesDelMes.length) {
