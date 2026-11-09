@@ -791,7 +791,7 @@ body {
 }
 
 </style>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.5.1/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -1288,6 +1288,9 @@ body {
   <div id="tab-precios" class="tab-content">
     <div class="section-title">Precios en tiempo real — Cierre anterior · Variación</div>
     <div class="price-grid" id="price-grid"></div>
+    <div style="margin-top:12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text-muted)">
+      Tipos de cambio: <a href="https://www.exchangerate-api.com" target="_blank" rel="noopener" style="color:var(--text-muted)">Rates By Exchange Rate API</a> (se actualizan 1 vez por día)
+    </div>
   </div>
 
   <!-- ══ INDICES TAB ══ -->
@@ -1977,23 +1980,38 @@ const SYMBOLS = [
 ];
 
 let priceData = {};
-let _fxCache = null; // Cache de rates FX (1 sola llamada por ciclo)
+let _fxCache = null; // Cache de rates FX
+let _fxCacheTs = 0;  // cuándo se bajaron (ms); las tasas se actualizan 1 vez por día
 
 // exchangerate-api.com: 1 request trae TODOS los pares desde USD (ex-Frankfurter, ver fix 28/08)
 async function fetchFxRatesAll() {
-  if (_fxCache) return _fxCache;
-  try {
-    // Frankfurter (api.frankfurter.app) bloquea CORS para pedritozar.github.io desde
-    // hace un tiempo (confirmado en consola: "No 'Access-Control-Allow-Origin' header") —
-    // por eso los pares FX quedaban en "Cargando..." eterno en el tab Precios, sin importar
-    // cuánto se esperara. exchangerate-api.com/v4 devuelve el mismo esquema JSON
-    // (base/date/rates), así que es reemplazo directo sin tocar getFXPrice() ni nada río abajo.
-    // Igual que Frankfurter: rates diarias (ECB-like), no tick a tick — por eso chg queda null
-    // acá abajo, sin cambios respecto al comportamiento previo. Fix 28/08.
-    const res = await fetch('https://api.exchangerate-api.com/v4/latest/USD');
-    _fxCache = await res.json();
+  // exchangerate-api actualiza las tasas 1 vez por día y limita (HTTP 429, bloqueo ~20 min) a quien
+  // pide de más. Antes se pedían en CADA ciclo de 60s (~1440/día). Ahora: caché de 1 hora en memoria
+  // y en localStorage (sobrevive a recargas), endpoint abierto v6 vigente y el v4 anterior de respaldo.
+  const TTL = 60 * 60 * 1000;
+  if (_fxCache && Date.now() - _fxCacheTs < TTL) return _fxCache;
+  let guardada = null;
+  try { guardada = JSON.parse(localStorage.getItem('pei_fx_cache') || 'null'); } catch (e) {}
+  if (guardada && guardada.rates && guardada.rates.rates && Date.now() - guardada.ts < TTL) {
+    _fxCache = guardada.rates; _fxCacheTs = guardada.ts;
     return _fxCache;
-  } catch(e) { return null; }
+  }
+  const urls = ['https://open.er-api.com/v6/latest/USD', 'https://api.exchangerate-api.com/v4/latest/USD'];
+  for (const u of urls) {
+    try {
+      const res = await fetch(u);
+      if (!res.ok) continue;
+      const d = await res.json();
+      if (!d || !d.rates || typeof d.rates.EUR !== 'number') continue;
+      _fxCache = { base: 'USD', date: d.date || d.time_last_update_utc || '', rates: d.rates };
+      _fxCacheTs = Date.now();
+      try { localStorage.setItem('pei_fx_cache', JSON.stringify({ ts: _fxCacheTs, rates: _fxCache })); } catch (e) {}
+      return _fxCache;
+    } catch (e) {}
+  }
+  // Si ambas fuentes fallan, mejor unas tasas viejas guardadas que "Cargando..." eterno.
+  if (guardada && guardada.rates && guardada.rates.rates) { _fxCache = guardada.rates; return _fxCache; }
+  return _fxCache || null;
 }
 
 function getFXPrice(rates, sym, invert) {
@@ -2070,7 +2088,7 @@ function renderPriceSkeleton() {
 
 async function fetchPrices() {
   renderPriceSkeleton();
-  _fxCache = null; // Reset cache por ciclo
+  // (la caché del tipo de cambio ya no se borra por ciclo: ver fetchFxRatesAll)
 
   // 1 sola llamada para todos los pares forex
   const fxRates = await fetchFxRatesAll();
@@ -2294,7 +2312,10 @@ function parseCSV(text) {
   try {
     const saved = localStorage.getItem('pei_csv_backup');
     if (saved) parseCSV(saved);
-  } catch(e) {}
+  } catch(e) {
+    // Antes este catch estaba vacío: un error al restaurar el CSV (ej. TDZ) se veía como "sin trades".
+    console.error('restoreCSV: no se pudo restaurar el CSV guardado', e);
+  }
 })()
 
 // ══════════════════════════════════════
@@ -6815,8 +6836,8 @@ initAutoSync();
   // feature de Histórico también LEE 'trades_history' vía peisysGetCollection
   // -- si esa pestaña no carga, revisar las Firestore Rules (ver CHANGELOG).
   // ══════════════════════════════════════
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getFirestore, doc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js";
+  import { getFirestore, doc, setDoc, collection, getDocs } from "https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js";
 
   const firebaseConfig = {
     apiKey: "AIzaSyAGfXyBG1OuoOyNgtdmLNvXHq1WD2MsnRo",

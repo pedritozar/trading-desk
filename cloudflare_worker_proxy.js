@@ -1,5 +1,5 @@
 // ══════════════════════════════════════════════════════════════════════════
-// PEI TRADING DESK — Proxy CORS (Cloudflare Worker)
+// PEI TRADING DESK — Proxy CORS (Cloudflare Worker) — v2 (9/11/2026)
 // ══════════════════════════════════════════════════════════════════════════
 // Qué resuelve: Yahoo Finance (query1.finance.yahoo.com) no manda cabeceras
 // CORS, así que el navegador bloquea el fetch directo desde
@@ -30,23 +30,41 @@
 //
 // No hace falta wrangler ni terminal — todo se hace desde el dashboard web.
 // ══════════════════════════════════════════════════════════════════════════
+// ── CAMBIOS DE LA v2 (9/11/2026) — mismo formato de pedido: /?url=<URL codificada> ──
+// • Caché real en el borde de Cloudflare (120 s, solo respuestas 200): varias pestañas/recargas
+//   comparten una sola consulta a Yahoo. Antes el "Cache-Control" solo servía al navegador.
+//   Yahoo responde 429 (Too Many Requests) cada vez más seguido, y menos consultas = menos 429.
+// • Si Yahoo contesta 429, error 5xx o no responde, reintenta UNA vez con el otro host
+//   (query1 <-> query2) antes de devolver el error.
+// • Solo deja pasar la ruta /v8/finance/chart/ (la única que usa el dashboard) y solo GET/OPTIONS.
+// • Los errores no se cachean (Cache-Control: no-store).
+// ── CÓMO ACTUALIZAR EL WORKER YA DEPLOYADO (3 minutos) ──
+// dash.cloudflare.com → Workers & Pages → "pei-cors-proxy" → Edit code → borrar todo →
+// pegar TODO este archivo → Deploy. La URL no cambia: no hay que tocar nada en ⚙ Config.
+// Para volver atrás: pegar el archivo anterior (git: cloudflare_worker_proxy.js del commit previo).
+// ══════════════════════════════════════════════════════════════════════════
 
-// Hosts permitidos. Agregar acá si en el futuro aparece otro caso de CORS
-// bloqueado (mismo patrón: agregar el host, no abrir el proxy entero).
+// Hosts y ruta permitidos. Agregar acá si en el futuro aparece otro caso de CORS
+// bloqueado (mismo patrón: agregar el host/ruta, no abrir el proxy entero).
 const ALLOWED_HOSTS = [
   'query1.finance.yahoo.com',
   'query2.finance.yahoo.com',
 ];
+const ALLOWED_PATH_PREFIX = '/v8/finance/chart/';
+const CACHE_SECONDS = 120;
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36';
 
 export default {
   async fetch(request) {
-    const reqUrl = new URL(request.url);
-
     // Preflight CORS (el navegador lo manda antes del fetch real en algunos casos)
     if (request.method === 'OPTIONS') {
-      return new Response(null, { headers: corsHeaders() });
+      return new Response(null, { status: 204, headers: corsHeaders() });
+    }
+    if (request.method !== 'GET' && request.method !== 'HEAD') {
+      return jsonError('Método no permitido', 405);
     }
 
+    const reqUrl = new URL(request.url);
     const target = reqUrl.searchParams.get('url');
     if (!target) {
       return jsonError('Falta el parámetro ?url=', 400);
@@ -62,26 +80,46 @@ export default {
     if (!ALLOWED_HOSTS.includes(targetUrl.hostname)) {
       return jsonError(`Host no permitido: ${targetUrl.hostname}`, 403);
     }
-
-    try {
-      const upstream = await fetch(targetUrl.toString(), {
-        headers: { 'User-Agent': 'Mozilla/5.0 (PEI Trading Desk proxy)' },
-      });
-      const body = await upstream.text();
-      return new Response(body, {
-        status: upstream.status,
-        headers: {
-          ...corsHeaders(),
-          'Content-Type': upstream.headers.get('Content-Type') || 'application/json',
-          // Cache corto (60s) — Yahoo no necesita más frecuencia que eso acá,
-          // y evita pegarle de más si el dashboard queda abierto con varias
-          // pestañas o se recarga seguido.
-          'Cache-Control': 'public, max-age=60',
-        },
-      });
-    } catch (e) {
-      return jsonError('Error consultando el upstream: ' + e.message, 502);
+    if (!targetUrl.pathname.startsWith(ALLOWED_PATH_PREFIX)) {
+      return jsonError('Ruta no permitida', 403);
     }
+
+    // Primero el host pedido; si falla (429/5xx/red), una vez con el otro.
+    const otro = ALLOWED_HOSTS.find(h => h !== targetUrl.hostname);
+    const intentos = [targetUrl.hostname, otro];
+    let ultima = null;
+
+    for (const host of intentos) {
+      const u = new URL(targetUrl.toString());
+      u.hostname = host;
+      try {
+        const upstream = await fetch(u.toString(), {
+          headers: { 'User-Agent': UA, 'Accept': 'application/json,text/plain,*/*', 'Accept-Language': 'en-US,en;q=0.9' },
+          // Caché en el borde de Cloudflare solo para respuestas buenas; los errores no se guardan.
+          cf: { cacheTtlByStatus: { '200-299': CACHE_SECONDS, '300-599': 0 }, cacheEverything: true },
+        });
+        const body = await upstream.text();
+        ultima = { status: upstream.status, body, ct: upstream.headers.get('Content-Type'), host };
+        if (upstream.status === 429 || upstream.status >= 500) continue; // probar con el otro host
+        break;
+      } catch (e) {
+        ultima = { error: e.message, host };
+      }
+    }
+
+    if (!ultima || ultima.error) {
+      return jsonError('Error consultando el upstream: ' + (ultima ? ultima.error : 'sin respuesta'), 502);
+    }
+    const ok = ultima.status >= 200 && ultima.status < 300;
+    return new Response(ultima.body, {
+      status: ultima.status,
+      headers: {
+        ...corsHeaders(),
+        'Content-Type': ultima.ct || 'application/json',
+        'Cache-Control': ok ? 'public, max-age=60' : 'no-store',
+        'X-Proxy-Upstream': ultima.host,
+      },
+    });
   },
 };
 
@@ -90,12 +128,14 @@ function corsHeaders() {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Max-Age': '86400',
+    'Access-Control-Expose-Headers': 'X-Proxy-Upstream',
   };
 }
 
 function jsonError(msg, status) {
   return new Response(JSON.stringify({ error: msg }), {
     status,
-    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
   });
 }
