@@ -25,6 +25,7 @@ cd "$REPO_DIR" || exit 1
 ALLOWED_FILES=(
   ".gitignore"
   "CHANGELOG_PEI_trading_v4_3.md"
+  "REGISTRO_bugs_y_salud_del_codigo.md"
   "RESEARCH_ideas_wallstreet.txt"
   "ESCENARIOS_historicos_notion_30-10.txt"
   "cloudflare_worker_proxy.js"
