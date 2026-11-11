@@ -2007,7 +2007,7 @@ async function fetchFxRatesAll() {
       _fxCacheTs = Date.now();
       try { localStorage.setItem('pei_fx_cache', JSON.stringify({ ts: _fxCacheTs, rates: _fxCache })); } catch (e) {}
       return _fxCache;
-    } catch (e) {}
+    } catch (e) { console.warn('fetchFxRatesAll: fuente caída, pruebo la siguiente', u, e && e.message); }
   }
   // Si ambas fuentes fallan, mejor unas tasas viejas guardadas que "Cargando..." eterno.
   if (guardada && guardada.rates && guardada.rates.rates) { _fxCache = guardada.rates; return _fxCache; }
@@ -2030,7 +2030,7 @@ async function fetchFinnhubPrice(symbol) {
     if (d && d.c && d.c > 0) {
       return { price: d.c, chg: d.dp || 0 };
     }
-  } catch(e) {}
+  } catch(e) { console.warn('fetchFinnhubPrice falló', symbol, e && e.message); }
   return null;
 }
 
@@ -2050,7 +2050,7 @@ async function fetchMOEX() {
         updatePriceCard(m.sym, price, chg);
         got = true;
       }
-    } catch(e) {}
+    } catch(e) { console.warn('MOEX (board) falló', m.ticker, e && e.message); }
     // Fallback (fix 09/09): RTSI no devuelve datos bajo el board fijo 'SNDX' (a diferencia
     // de IMOEX) -- causa distinta a la de HSTECH/MOEX/CSI300 (esas son CORS de Yahoo, esto es
     // un board equivocado en la API de MOEX). Reintenta sin filtro de board -- ese endpoint
@@ -2069,7 +2069,7 @@ async function fetchMOEX() {
           priceData[m.sym] = { price, chg };
           updatePriceCard(m.sym, price, chg);
         }
-      } catch(e) {}
+      } catch(e) { console.warn('MOEX (fallback sin board) falló', m.ticker, e && e.message); }
     }
   }
 }
@@ -6662,7 +6662,7 @@ async function fetchMOEXIndice(ticker) {
     if (row && row[1] != null) {
       return { price: parseFloat(row[1]), change: parseFloat(row[2]) || 0, status: 'closed' };
     }
-  } catch(e) {}
+  } catch(e) { console.warn('fetchMOEXIndice (SNDX) falló', ticker, e && e.message); }
   try {
     const url2 = `https://iss.moex.com/iss/engines/stock/markets/index/securities/${ticker}.json?iss.meta=off&iss.only=marketdata&marketdata.columns=BOARDID,SECID,CURRENTVALUE,LASTTOPREVPRICE`;
     const res2 = await fetch(url2);
@@ -6672,7 +6672,7 @@ async function fetchMOEXIndice(ticker) {
     if (row2) {
       return { price: parseFloat(row2[2]), change: parseFloat(row2[3]) || 0, status: 'closed' };
     }
-  } catch(e) {}
+  } catch(e) { console.warn('fetchMOEXIndice (fallback) falló', ticker, e && e.message); }
   return null;
 }
 
