@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-11-11 (sesión Cowork, 10ma: auditoría de este CHANGELOG, nuevo `REGISTRO_bugs_y_salud_del_codigo.md`, 6 `catch` vacíos de fuentes de datos ahora con log; commits locales sin pushear). Antes, 2026-11-09 (sesión Cowork, 9na cerrada y pusheada `69ba926..f80728a`: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
+**Última actualización:** 2026-11-11 (sesión Cowork, 10ma, pusheada `f80728a..e6f3ffa`: auditoría de este CHANGELOG, nuevo `REGISTRO_bugs_y_salud_del_codigo.md`, 6 `catch` vacíos de fuentes de datos ahora con log). Antes, 2026-11-09 (sesión Cowork, 9na cerrada y pusheada `69ba926..f80728a`: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -79,7 +79,7 @@ El análisis de `REGISTRO_bugs_y_salud_del_codigo.md` muestra que de los 3 episo
 
 ---
 
-## Sesión 2026-11-11 (Cowork, 10ma — auditoría del CHANGELOG + registro de bugs y salud del código) — commits LOCALES, sin pushear
+## Sesión 2026-11-11 (Cowork, 10ma — auditoría del CHANGELOG + registro de bugs y salud del código) — pusheada 11/11 (`f80728a..e6f3ffa`)
 
 Pedido de Pedro (11/11 02:21): revisar si "esta sección" está desactualizada, actualizar los txt con los bugs encontrados y cómo se resolvieron, medir qué tan limpio está el código, y llevar la cuenta en el tiempo de **cada cuánto aparecen los bugs y a qué se deben** (código, error del modelo u otro). "Esta sección" no tenía adjunto: se interpretó como **todo este CHANGELOG** (si Pedro se refería a una sección puntual, decirlo).
 
@@ -408,10 +408,10 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 ## Estado actual del dashboard
 
 - ✅ **Pusheado 30/10 (`cf16a20..69ba926`, 4 commits):** pestaña **Riesgo** v1 y CHANGELOG de la 8va. La pestaña Riesgo está en vivo pero **todavía no se probó en el navegador real de Pedro** (solo en jsdom).
-- 🕒 **Local, SIN pushear (11/11, 10ma):** CHANGELOG de la 9na (`12e214c`) + 6 `catch` de fuentes de datos con log (B32) + `REGISTRO_bugs_y_salud_del_codigo.md` + `check_folder.sh`. El HTML en vivo sigue siendo el de `f80728a`; el cambio de código es sólo de logs, no cambia el comportamiento.
+- ✅ **Pusheado 11/11 (`f80728a..e6f3ffa`, 3 commits, 10ma):** CHANGELOG de la 9na (`12e214c`) + 6 `catch` de fuentes de datos con log (B32, `255467a`) + `REGISTRO_bugs_y_salud_del_codigo.md` y `check_folder.sh` (`e6f3ffa`). El cambio de código es sólo de logs, no cambia el comportamiento.
 - ✅ **Pusheado 9/11 (`69ba926..f80728a`, 2 commits):** `parseFechaFlex` (fechas D/M), `catch` de `restoreCSV`, Chart.js 4.5.1, Firebase 12.19.0, tipo de cambio con caché y Worker v2 (el archivo; **el Worker en Cloudflare sigue siendo el viejo hasta que Pedro lo re-deploye**). Todavía **no probado en Safari**.
 - 📦 **Librerías (9/11, en vivo tras el push):** Chart.js 4.5.1 (antes 4.4.4) y Firebase 12.19.0 (antes 10.8.0). Tipo de cambio: `open.er-api.com/v6` con caché de 1 hora.
-- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `f80728a` (9/11; el repo local va varios commits adelante, ver arriba) — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
+- ✅ **En vivo:** https://pedritozar.github.io/trading-desk/ — `origin/main` en `e6f3ffa` (11/11; el CHANGELOG puede ir 1 commit adelante) — **pusheado 30/10** (`d6c6499..e62f0c9`, 4 commits: pegado de escenarios, UX del pegado, actualizaciones/Editar/`Actualizar:`, carga histórica de Notion + clave de duplicado por día). Local = origin, árbol limpio, `index.html` idéntico a la fuente, `check_folder.sh` ✅. **Falta que Pedro pruebe en el navegador real con recarga forzada (Cmd+Shift+R).**
 - ✅ Tab nueva **Commodities** (18/09): trigo/arroz/maíz/ganado/cerdo/WTI/gas/oro/plata/cobre/acero vía Yahoo Finance, historial semanal en localStorage (hasta 12 snapshots) + mini gráfico de evolución (nuevo 18/09, 3ra sesión — ver detalle).
 - ✅ Tab nueva **Bonos** (18/09): US Treasuries — futuros 2Y/5Y/10Y/30Y (CME) + yields 5Y/10Y/30Y, vía Yahoo Finance, historial diario en localStorage (hasta 30 días) para var. día/semana + mini gráfico de evolución (ampliado de 14 a 30 días, 3ra sesión).
 - ✅ **RGBI (OFZ ruso) sumado al tab Bonos (19/10, 5ta sesión):** vía MOEX ISS (`fetchMOEXIndice()`, mismo patrón que `fetchMOEX()`), mismo historial diario/mini gráfico que el resto de Bonos. **Verificado en vivo** (111,69 pts, CERRADO).
