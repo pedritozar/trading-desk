@@ -1,7 +1,7 @@
 # PEI TRADING SYSTEM — CHANGELOG v4.3
 
 **Proyectos:** Trading System (Dashboard + Excel) | Cartera Real (Alfy/Notion) | Reactor Nuclear IA
-**Última actualización:** 2026-11-11 (sesión Cowork, 10ma, pusheada `f80728a..e6f3ffa`: auditoría de este CHANGELOG, nuevo `REGISTRO_bugs_y_salud_del_codigo.md`, 6 `catch` vacíos de fuentes de datos ahora con log). Antes, 2026-11-09 (sesión Cowork, 9na cerrada y pusheada `69ba926..f80728a`: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
+**Última actualización:** 2026-11-13 (sesión Cowork, 11ma: Excel — fórmulas desfasadas, formatos, separador decimal; `parseFechaFlex` con año de 2 dígitos; commits locales sin pushear). Antes, 2026-11-11 (sesión Cowork, 10ma, pusheada `f80728a..e6f3ffa`: auditoría de este CHANGELOG, nuevo `REGISTRO_bugs_y_salud_del_codigo.md`, 6 `catch` vacíos de fuentes de datos ahora con log). Antes, 2026-11-09 (sesión Cowork, 9na cerrada y pusheada `69ba926..f80728a`: control de carpeta/git, revisión de bugs, `parseFechaFlex`, librerías (Chart.js 4.5.1 / Firebase 12.19.0), tipo de cambio con caché, Worker v2; antes, 30/10: sesión Cowork, 8va cerrada: reconciliación con historial CMC + reglas de riesgo + pestaña Riesgo v1 (calculadora, guardado, copiado a Excel); antes, 7ma — Escenarios: pegado texto/CSV, actualizaciones por fecha, Editar, bloque `Actualizar:`, carga histórica de Notion; pusheado `d6c6499..e62f0c9`)
 
 > **Supersede a `CHANGELOG_PEI_trading_v4_2.md`** (podés borrarlo).
 > El Reactor Nuclear IA tiene changelog propio: `CHANGELOG_reactor.md` en `Desktop/reactor IA/`. No mezclar.
@@ -76,6 +76,29 @@ El 30/10 una corrección del CHANGELOG falló en silencio (el texto ancla no coi
 El análisis de `REGISTRO_bugs_y_salud_del_codigo.md` muestra que de los 3 episodios de TDZ, **2 los reintroduje yo después de que la Lección #1 ya estaba escrita** (08/09 y 22/10). Los 5 errores propios documentados (15 % de los 33 bugs) son de dos tipos: reintroducir un bug conocido por no correr la verificación completa, y afirmar/escribir un número sin comprobarlo.
 - **Regla fija:** después de **cualquier** cambio al HTML, correr `test2.js` (carga con CSV real + 13 pestañas) y ESLint (`no-undef` debe dar 0 errores) **antes** de decir que está listo; si se agregó una `const`/`let` de nivel superior, mirar que el número de avisos `no-use-before-define` no suba (hoy 30). Leer el resultado real, no suponerlo.
 - Al cerrar cada sesión con cambios de código: agregar los bugs al registro y una fila al *Historial de snapshots*.
+
+### 9. Arreglar la instancia no es arreglar la clase (nueva 13/11)
+B34 repite B01 y B37 repite B29: el 26/08 se corrigieron las fórmulas de las filas 5–9 y quedaron 93 desfasadas más abajo; el 09/11 se arregló la fecha con año de 4 dígitos y no la de 2.
+- **Regla fija:** al arreglar algo, barrer *toda* la clase con un chequeo mecánico (todas las filas de la columna hasta la 104, todas las variantes de formato) y dejar el caso en un test. En el Excel: comparar la fila de cada referencia con la fila de la celda.
+- **Regla del Excel (es-AR):** los precios y el riesgo se escriben **con coma** (`111,898`, `0,33%`). Con punto queda como texto o se multiplica por 1000. Lo más seguro: pegar la fila que genera la pestaña Riesgo ("Copiar fila").
+
+---
+
+## Sesión 2026-11-13 (Cowork, 11ma — Excel: casillas que no calculaban) — commits LOCALES, sin pushear
+
+Pedido de Pedro (13/11 16:07, con captura): "las casillas a mejorar en Excel no toman ni calculan nada si pongo los precios, con ',' o '.' redondea los números si van con ',' pero con punto nada".
+
+**Causas (4 bugs, B34–B37 del registro)**
+- **B34 — fórmulas desfasadas (la causa de "no calcula nada").** `K10` (R/R Teórico) y `N10` (P&L) apuntaban a la fila 12, y así hasta la 102 (93 fórmulas por columna). Misma falla que B01 del 26/08, que sólo se había arreglado en las filas 5–9. Además esas fórmulas sueltas bajo la tabla impedían que ésta se expandiera: la fila nueva quedó fuera de `ResultadosTraiding` (B4:Q9).
+- **B35 — separador decimal.** El Excel está en español: con **punto**, `17.29025` queda como texto (no calcula) y `111.898` se lee como 111898 (punto = miles). CADJPY (13/11) quedó así, y `0.33%` quedó como texto.
+- **B36 — "redondea".** Era sólo el formato `#,##0` en ENTRADA/SL de 5 filas (159, 113, 17); los valores guardados tenían decimales.
+- **B37 — fecha.** `13/11/26` (formato del sistema, año de 2 dígitos) se exportaría al CSV así y el dashboard la leía como inválida (el trade desaparecería de los resúmenes).
+
+**Arreglado en una COPIA** (`tracker_bitacora_traiding__DEFINITIVO_ARREGLADO.xlsx`; el original no se tocó porque Excel lo tenía abierto): fórmulas con referencia a su propia fila; tabla `B4:Q10` con R/R Teórico y P&L como columnas calculadas (se autocompletan al agregar filas); fórmulas sueltas de abajo eliminadas; CADJPY corregido (111,898 / 111,767 / 112,348 / 0,33%); formato General en precios y `m/d/yyyy` en fechas; validaciones nuevas (aviso si el precio parece mal separado; RIESGO% sólo número 0–10 %). **Dashboard y HTML:** `parseFechaFlex` ahora lee D/M/AA (`13/11/26`) además de D/M/AAAA.
+
+**Verificación:** recálculo independiente con LibreOffice sobre original y copia: filas 5–9 idénticas, **K10 = 3,435** (= 0,450/0,131 a mano), los KPIs del DASHBOARD no cambian (5 trades, WR 60 %, +6,62R, expectancy 1,324; la fila 10 está EN CURSO y no cuenta) · `tf.js` 17 casos OK · ESLint 0 errores · 7 tests sin fallas. **No verificado:** abrirlo en Excel de escritorio (sólo LibreOffice); que Excel autocomplete la fila 11 al escribirla.
+
+**Para Pedro:** cerrar Excel y avisar para reemplazar el original por la copia (queda backup); o abrir la copia y probar escribiendo una fila nueva debajo de la 10. Hay en la raíz un archivo que no es del proyecto: `text de puntiaciones de tradiing con deepseke.txt` (lo marca `check_folder.sh`; no lo toqué).
 
 ---
 
@@ -449,6 +472,7 @@ El código del Reactor/DeepSeek **no se pega directo**. Historial de fallas real
 - [x] ~~Pushear 4 commits locales (30/10, 8va)~~ — **pusheados 30/10 (`cf16a20..69ba926`)**.
 - [ ] **Re-deployar el Worker v2 en Cloudflare (Pedro, 3 min; 9/11):** pegar `cloudflare_worker_proxy.js` en Workers & Pages → pei-cors-proxy → Edit code → Deploy. Sin esto el proxy sigue siendo el viejo (funciona, pero sin caché de borde ni reintento).
 - [x] ~~Pushear los 2 commits de la sesión 9na~~ — **pusheados 9/11 (`69ba926..f80728a`)**.
+- [ ] **Reemplazar el Excel por la copia arreglada (13/11, Pedro):** cerrar Excel y avisar (se hace backup y se reemplaza `tracker_bitacora_traiding__DEFINITIVO.xlsx`), o abrir `…_ARREGLADO.xlsx` y probar escribiendo una fila nueva debajo de la 10 (con coma). Después **re-exportar el CSV** para que el dashboard vea CADJPY (EN CURSO). Si Excel no autocompleta K/N en la fila nueva, decirlo: hay plan B.
 - [ ] **Probar la pestaña Riesgo en Safari + agregar columnas R "RIESGO REAL%" y S "UNIDADES" al Excel** (pasos en el cierre de la sesión 8va).
 - [ ] **Cargar 3 trades de agosto al Excel** (están en Notion, no en la bitácora): EUR/USD 12/08 GANADA MT5 Demo · GBP-AUD 11/08 PERDIDA CMC Demo · AUD/USD 25/08 PERDIDA CMC Demo (MALETA). Falta que Pedro pase Entrada/SL/TP. Quedan afuera SPY500 (EN CURSO) y EUR/JPY (orden pendiente). **Pedro lo hace al final del día 19/10 (acordado); antes de eso el banner de ausencia dice "124 días sin actividad (última 17/6)" por esto, no por falta de actividad real.** **Pedro lo hace el 23/10 (pospuesto del 19/10).**
   - **Actualización 30/10:** en Notion hay 6 trades de agosto con resultado (+ gold-usd 5/8, SPY500 13/8, Eur/jpy 28/8→4/9), no 3; Pedro debe confirmar cuáles fueron ejecutados de verdad y sistema/tipo (swing = MALETA). Falta Entrada/SL/TP de cada uno. GBPCHF NO va acá: es escenario (ver sesión 30/10).
@@ -519,7 +543,8 @@ Mudado a `RESEARCH_ideas_wallstreet.txt` (misma carpeta) — archivo aparte, fec
 | 09/06/26 | aud/jpy | TESLA | scalping | SHORT | 2,84 | GANADA | +2,84 | CMC Demo |
 | 17/06/26 | USDMXN | TESLA | intraday | LONG | — | PERDIDA | -1,00 | MT5 Demo |
 
-**Totales:** 5 trades · WR 60% · **+6,62R** · Expectancy 1,324 · Drawdown -1R · 100% TESLA
+**Nota 13/11:** hay un 6.º trade, CADJPY 13/11 (TESLA scalping LONG, EN CURSO), cargado en el Excel y todavía no en el CSV del dashboard (hay que re-exportar el CSV). No cuenta en las métricas hasta que cierre.
+**Totales (5 trades cerrados):** WR 60% · **+6,62R** · Expectancy 1,324 · Drawdown -1R · 100% TESLA
 
 > RUSSEL 2000 y SYP500 eran análisis de TradingView (no ejecutados) → migrados a Notion.
 > Nota: esta tabla quedó desactualizada frente a Notion (que tiene los trades de agosto) — ver "Cargar 3 trades de agosto al Excel" en Pendientes.

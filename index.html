@@ -2327,9 +2327,10 @@ function parseCSV(text) {
 // se mantiene M/D/AAAA (así exporta hoy el Excel). Devuelve un Date (inválido si no se entiende).
 function parseFechaFlex(v) {
   const s = String(v == null ? '' : v).trim();
-  const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/.exec(s);
+  const m = /^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4}|\d{2})(?!\d)/.exec(s);
   if (m && +m[1] > 12 && +m[2] >= 1 && +m[2] <= 12) {
-    const d = new Date(+m[3], +m[2] - 1, +m[1]);
+    const anio = m[3].length === 2 ? 2000 + +m[3] : +m[3]; // 13/11/26 (formato de fecha corta del Excel) = 2026
+    const d = new Date(anio, +m[2] - 1, +m[1]);
     return d.getMonth() === +m[2] - 1 ? d : new Date(NaN);
   }
   return new Date(s);

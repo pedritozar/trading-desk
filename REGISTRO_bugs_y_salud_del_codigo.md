@@ -60,26 +60,31 @@
 | B31 | 09/11 | Worker de Cloudflare sin caché de borde ni reintento ante 429/5xx | COD | AUD | Worker v2 (**falta que Pedro lo re-deploye**) |
 | B32 | 11/11 | 6 `catch` vacíos en fuentes de datos (tipo de cambio, Finnhub, MOEX ×4): una fuente caída no dejaba rastro | COD | AUD | `console.warn` con símbolo y mensaje |
 | B33 | 11/11 | Mi primer arreglo de B32 usó la variable `url` donde el loop del tipo de cambio la llama `u` (habría tirado `ReferenceError` dentro del propio catch) | CLA | AUTO | Corregido antes de commitear; ESLint `no-undef` = 0 |
+| B34 | 13/11 | Excel: **93 fórmulas** de R/R Teórico (K) y P&L (N), filas 10–102, apuntaban 2 filas más abajo (`K10` miraba `G12`). La fila nueva (CADJPY) no calculaba nada, y esas fórmulas sueltas debajo de la tabla impedían que ésta creciera (quedó en `B4:Q9`). **Repite B01:** el arreglo del 26/08 sólo corrigió las filas 5–9 | COD | USR+AUD | Fórmulas con referencia a su propia fila; tabla `B4:Q10` con K y N como columnas calculadas (se autocompletan al agregar filas); fórmulas sueltas de abajo eliminadas |
+| B35 | 13/11 | Excel (es-AR): precio con **punto** no se lee como decimal: `17.29025` queda como texto y `111.898` se lee como 111898 (punto = miles); `0.33%` queda como texto. CADJPY (Entrada/SL/TP/Riesgo) cargado así | DAT | USR | Valores corregidos (÷1000, 0,33%); validación en ENTRADA/SL/TP que avisa por separador y por precio ≥ 1000 en pares de 6 letras; RIESGO% sólo acepta número 0–10 %. El hábito correcto: escribir con coma o pegar la fila de la pestaña Riesgo |
+| B36 | 13/11 | Excel: formato `#,##0` en ENTRADA/SL de 5 filas mostraba 159, 113, 17 (redondeo sólo visual; el valor guardado tenía decimales y el R/R daba bien) | COD | USR | Formato General en G5:I104 |
+| B37 | 13/11 | La fecha de la fila nueva tenía el formato del sistema (`13/11/26`, año de 2 dígitos): el CSV la exporta así y `parseFechaFlex` la leía como inválida → el trade habría desaparecido de los resúmenes sin aviso. **Repite B29** | DAT | AUD | Formato `m/d/yyyy` explícito en B5:B104 + `parseFechaFlex` acepta D/M/AA cuando el 1.º número es > 12 (`tf.js`: 17 casos, 4 nuevos) |
 
 *No hay entradas de abril a junio: el CHANGELOG sólo conserva el detalle desde agosto. Git muestra commits de arreglo en esos meses (ver abajo) pero sin descripción recuperable del bug.*
 
 ## Conteos
 
-**Por causa (33 bugs documentados):**
+**Por causa (37 bugs documentados, % redondeado):**
 
 | Causa | Cantidad | % |
 |---|---|---|
-| COD | 15 | 45 % |
-| CLA | 5 | 15 % |
-| API | 5 | 15 % |
-| DAT | 4 | 12 % |
-| PRO | 3 | 9 % |
+| COD | 17 | 46 % |
+| CLA | 5 | 14 % |
+| API | 5 | 14 % |
+| DAT | 6 | 16 % |
+| PRO | 3 | 8 % |
 | NAV | 1 | 3 % |
 
-**Por mes (fecha del bug):** agosto 10 · septiembre 12 · octubre 5 · noviembre 6 (al 11/11).
+**Por mes (fecha del bug):** agosto 10 · septiembre 12 · octubre 5 · noviembre 10 (al 13/11).
 **Proxy independiente — commits de git cuyo mensaje habla de fix/bug/error, sobre el total de commits del mes:** abril 6/14 · mayo 3/4 · junio 7/11 · agosto 5/5 · septiembre 19/49 (39 %) · octubre 7/27 (26 %) · noviembre 2/3. (Es una búsqueda por palabras clave: sirve de tendencia, no de recuento exacto.)
 
-**Cómo se detectaron (33):** AUD 11 · ND 8 · USR 5 · AUTO 3 · VER 2 · CON 2 · TEST 1 · PRE 1.
+**Cómo se detectaron (37):** AUD 12 · ND 8 · USR 8 · AUTO 3 · VER 2 · CON 2 · TEST 1 · PRE 1.
+**Repeticiones (un bug que reaparece después de un arreglo):** B34 repite B01 (79 días después) y B37 repite B29 (4 días después), además de los 3 episodios de TDZ (B07, B16, B24).
 
 ## Análisis: ¿cada cuánto y por qué aparecen?
 
@@ -90,6 +95,9 @@
 5. **Datos regionales (DAT 4, 12 %):** coma decimal ARG, fechas D/M, celdas mal cargadas. Mientras el Excel lo cargue un humano en formato local, esta categoría va a seguir. B29 sólo cubre las fechas inequívocas.
 6. **Los fallos silenciosos son el riesgo más caro:** B01–B06, B28 y B32 (8 de 33) mostraban números plausibles o "sin datos" sin ningún error visible. Por eso la Lección #3 (verificar contra cálculo a mano) y #7 (no usar `catch` vacío).
 7. **Tendencia:** la proporción de commits que arreglan algo bajó de 39 % (septiembre) a 26 % (octubre). Con tan pocos datos no se puede afirmar mejora; el indicador a mirar es **cuántos TDZ nuevos aparecen** (hoy: 0 desde el 22/10, es decir 20 días al 11/11).
+
+8. **Arreglos de la instancia, no de la clase (nuevo 13/11).** B34 y B37 son reapariciones de B01 y B29: se corrigió el lugar donde se vio el síntoma (filas 5–9 del Excel; fechas con año de 4 dígitos) y no *todo* el conjunto (la columna completa hasta la fila 104; también el año de 2 dígitos). Es un fallo de **control de la auditoría** (en la taxonomía de la skill: "Claude-auditoría"/pasada incompleta), no sólo de código; el 26/08 no hay trailer, así que no se atribuye a nadie. **Contramedida:** después de arreglar algo, barrer mecánicamente toda la clase (todas las filas de la columna, todos los formatos de fecha) y dejar el caso en un test. Lección #9 del CHANGELOG.
+9. **El Excel es una fuente de bugs a la par del HTML:** 4 de los últimos 4 bugs (B34–B37) nacieron en el Excel o en cómo se exporta, no en el dashboard. Es donde se cargan los datos a mano, en formato regional.
 
 ## Snapshot de salud del código
 
@@ -115,6 +123,7 @@
 | Fecha | Líneas HTML | Funciones | Errores ESLint | Avisos TDZ | `catch` vacíos | Tests | Bugs nuevos |
 |---|---|---|---|---|---|---|---|
 | 11/11/2026 | 6.876 | 230 | 0 | 30 | 14 | 7/7 OK | 2 (B32, B33) |
+| 13/11/2026 | 6.877 | 230 | 0 | 30 | 14 | 7/7 OK (`tf.js` 17 casos) | 4 (B34–B37; 3 son del Excel) |
 
 ## Bugs abiertos / sin resolver
 
